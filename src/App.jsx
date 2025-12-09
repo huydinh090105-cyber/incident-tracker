@@ -26,24 +26,22 @@ import {
   Save, X, LayoutGrid, List, Database, MapPin, 
   Repeat, BarChart2, Phone, Calendar, MessageSquare,
   Lock, LogOut, UserCheck, Mail, RefreshCw, Copy, Layers,
-  Aperture, Upload 
+  Aperture, Upload, Eye
 } from 'lucide-react';
 
 // ==========================================
 // 1. CONFIGURATION LAYER
 // ==========================================
-
+const firebaseConfig = {
+  apiKey: "AIzaSyBxOcR7j53VOT4Uh-yjel6luVOjOtxNw5o",
+  authDomain: "incident-tracker-f9651.firebaseapp.com",
+  projectId: "incident-tracker-f9651",
+  storageBucket: "incident-tracker-f9651.firebasestorage.app",
+  messagingSenderId: "320586095896",
+  appId: "1:320586095896:web:3e3ee4044206872617926d"
+};
 // --- CẤU HÌNH (SANDBOX ENVIRONMENT) ---
 // const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
-};
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -225,7 +223,6 @@ const MOCK_DATA = [
 // 5. HELPER FUNCTIONS (COMPRESSION)
 // ==========================================
 
-// Helper function to compress images before storing
 const compressImage = (file, maxWidth = 800, quality = 0.6) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -238,7 +235,6 @@ const compressImage = (file, maxWidth = 800, quality = 0.6) => {
         let width = img.width;
         let height = img.height;
 
-        // Resize logic
         if (width > height) {
           if (width > maxWidth) {
             height *= maxWidth / width;
@@ -256,7 +252,6 @@ const compressImage = (file, maxWidth = 800, quality = 0.6) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Export as JPEG with reduced quality
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
     };
@@ -359,6 +354,8 @@ function IncidentTrackerContent() {
   const [projectsConfig, setProjectsConfig] = useState({}); 
   
   const [selectedIncident, setSelectedIncident] = useState(null);
+  const [previewData, setPreviewData] = useState(null); // State để lưu dữ liệu xem ảnh
+  
   const [loading, setLoading] = useState(true);
   const [generatingMock, setGeneratingMock] = useState(false);
   const [loginEmail, setLoginEmail] = useState(''); 
@@ -566,12 +563,8 @@ function IncidentTrackerContent() {
 
     setIsProcessingImage(true);
     try {
-        // Compress image to ensure it fits in Firestore document
-        // 800px width max, 0.6 quality usually results in < 100KB
         const compressedBase64 = await compressImage(file, 800, 0.6);
-        
         const currentImages = formData[uploadTarget] || [];
-        // Limit total images to prevent doc size explosion
         if (currentImages.length >= 3) {
             alert("Để đảm bảo hiệu năng, chỉ cho phép tối đa 3 ảnh mỗi mục.");
             setIsProcessingImage(false);
@@ -605,14 +598,13 @@ function IncidentTrackerContent() {
     if (!videoRef.current) return;
     
     const canvas = document.createElement('canvas');
-    const scale = 800 / videoRef.current.videoWidth; // Resize to max 800px width
+    const scale = 800 / videoRef.current.videoWidth; 
     canvas.width = 800;
     canvas.height = videoRef.current.videoHeight * scale;
     
     const ctx = canvas.getContext('2d');
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
     
-    // Compress quality to 0.6
     const base64Img = canvas.toDataURL('image/jpeg', 0.6);
     
     const targetField = cameraMode === 'before' ? 'imagesBefore' : 'imagesAfter';
@@ -680,6 +672,77 @@ function IncidentTrackerContent() {
         </div>
     </div>
   );
+
+  const renderImagePreviewModal = () => {
+    if (!previewData) return null;
+    
+    return (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm" onClick={() => setPreviewData(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                    <h3 className="font-bold text-gray-800 text-lg truncate pr-4">{previewData.title}</h3>
+                    <button onClick={() => setPreviewData(null)} className="p-2 hover:bg-gray-200 rounded-full transition">
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                <div className="flex-grow overflow-y-auto p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
+                        {/* Cột Trước */}
+                        <div className="flex flex-col">
+                            <h4 className="text-sm font-bold text-red-600 uppercase mb-4 flex items-center border-b pb-2">
+                                <AlertTriangle size={16} className="mr-2" />
+                                Hiện trường (Trước)
+                            </h4>
+                            {previewData.imagesBefore && previewData.imagesBefore.length > 0 ? (
+                                <div className="space-y-4">
+                                    {previewData.imagesBefore.map((img, idx) => (
+                                        <div key={idx} className="bg-gray-100 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                                            <img src={img} alt={`Before ${idx}`} className="w-full h-auto object-contain max-h-64 md:max-h-80" />
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-40 bg-gray-50 rounded-lg border border-dashed border-gray-200 text-gray-400">
+                                    <Camera size={32} className="mb-2 opacity-20" />
+                                    <span className="text-xs">Không có ảnh hiện trường</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Cột Sau */}
+                        <div className="flex flex-col">
+                            <h4 className="text-sm font-bold text-green-600 uppercase mb-4 flex items-center border-b pb-2">
+                                <CheckCircle size={16} className="mr-2" />
+                                Kết quả (Sau)
+                            </h4>
+                            {previewData.imagesAfter && previewData.imagesAfter.length > 0 ? (
+                                <div className="space-y-4">
+                                    {previewData.imagesAfter.map((img, idx) => (
+                                        <div key={idx} className="bg-gray-100 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                                            <img src={img} alt={`After ${idx}`} className="w-full h-auto object-contain max-h-64 md:max-h-80" />
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-40 bg-gray-50 rounded-lg border border-dashed border-gray-200 text-gray-400">
+                                    <CheckCircle size={32} className="mb-2 opacity-20" />
+                                    <span className="text-xs">Chưa có ảnh nghiệm thu</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="p-4 border-t bg-gray-50 text-right">
+                    <button onClick={() => setPreviewData(null)} className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition">
+                        Đóng
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+  };
 
   const renderLogin = () => (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
@@ -844,10 +907,17 @@ function IncidentTrackerContent() {
                         <span className="font-medium text-gray-700">{inc.reporter || 'Ẩn danh'}</span>
                     </div>
                     {(inc.imagesBefore?.length > 0 || inc.imagesAfter?.length > 0) && (
-                        <div className="flex items-center text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation(); // Ngăn sự kiện click lan ra ngoài (để không mở chi tiết)
+                                setPreviewData(inc);
+                            }}
+                            className="flex items-center text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 hover:bg-blue-100 transition z-10 active:scale-95"
+                            title="Bấm để xem nhanh ảnh"
+                        >
                             <Camera size={14} className="mr-1" />
-                            <span>Có ảnh</span>
-                        </div>
+                            <span className="font-medium">Xem ảnh</span>
+                        </button>
                     )}
                 </div>
                 </div>
@@ -1135,6 +1205,7 @@ function IncidentTrackerContent() {
   return (
     <div className="font-sans text-gray-900 bg-gray-100 min-h-screen w-full relative">
       {showCamera && renderCameraModal()}
+      {previewData && renderImagePreviewModal()}
       {view === 'list' && renderDashboard()}
       {view === 'create' && renderForm(false)}
       {view === 'detail' && renderForm(true)}
