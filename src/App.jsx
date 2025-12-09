@@ -33,7 +33,8 @@ import {
 // 1. CONFIGURATION LAYER
 // ==========================================
 
-// --- CẤU HÌNH CHO DEPLOY (VITE) ---
+// --- CẤU HÌNH (SANDBOX ENVIRONMENT) ---
+// const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -43,9 +44,6 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
-
-// --- CẤU HÌNH CHO PREVIEW (SANDBOX) ---
-// const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -224,7 +222,49 @@ const MOCK_DATA = [
 ];
 
 // ==========================================
-// 5. ERROR BOUNDARY & UI COMPONENTS
+// 5. HELPER FUNCTIONS (COMPRESSION)
+// ==========================================
+
+// Helper function to compress images before storing
+const compressImage = (file, maxWidth = 800, quality = 0.6) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Resize logic
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxWidth) {
+            width *= maxWidth / height;
+            height = maxWidth;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Export as JPEG with reduced quality
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+    };
+  });
+};
+
+// ==========================================
+// 6. ERROR BOUNDARY & UI COMPONENTS
 // ==========================================
 
 class ErrorBoundary extends React.Component {
@@ -240,6 +280,7 @@ class ErrorBoundary extends React.Component {
         <div className="min-h-screen flex items-center justify-center bg-gray-50 text-center p-4 font-sans">
           <div className="bg-white p-8 rounded-2xl shadow-xl border border-red-100 max-w-md w-full">
             <h2 className="text-xl font-bold text-gray-900 mb-2">Đã xảy ra sự cố</h2>
+            <p className="text-gray-500 text-sm mb-4">Vui lòng tải lại trang để tiếp tục.</p>
             <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-blue-700 transition shadow-sm flex items-center justify-center mx-auto gap-2">
               <RefreshCw size={18} /> Tải lại trang
             </button>
@@ -307,7 +348,7 @@ const SelectField = ({ label, value, onChange, options, required = false, disabl
 );
 
 // ==========================================
-// 6. MAIN CONTAINER
+// 7. MAIN CONTAINER
 // ==========================================
 
 function IncidentTrackerContent() {
@@ -334,6 +375,7 @@ function IncidentTrackerContent() {
   const [showCamera, setShowCamera] = useState(false);
   const [cameraMode, setCameraMode] = useState(null); // 'before' | 'after'
   const [uploadTarget, setUploadTarget] = useState(null); 
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -416,7 +458,11 @@ function IncidentTrackerContent() {
       setFormData({});
     } catch (e) {
       console.error("Error creating:", e);
-      alert("Lỗi khi tạo sự cố. Kích thước ảnh có thể quá lớn.");
+      if (e.code === 'resource-exhausted' || e.message.includes('longer than')) {
+        alert("Dữ liệu quá lớn (có thể do quá nhiều ảnh). Vui lòng giảm bớt ảnh.");
+      } else {
+        alert("Lỗi khi tạo sự cố: " + e.message);
+      }
     }
   };
 
@@ -429,7 +475,11 @@ function IncidentTrackerContent() {
         setFormData({});
     } catch (e) {
         console.error("Error updating:", e);
-        alert("Lỗi khi cập nhật.");
+        if (e.code === 'resource-exhausted' || e.message.includes('longer than')) {
+            alert("Dữ liệu quá lớn (có thể do quá nhiều ảnh). Vui lòng giảm bớt ảnh.");
+        } else {
+            alert("Lỗi khi cập nhật.");
+        }
     }
   };
 
@@ -510,26 +560,36 @@ function IncidentTrackerContent() {
     }
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-        alert("Ảnh quá lớn! Vui lòng chọn ảnh dưới 5MB.");
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-        const base64Img = reader.result;
+    setIsProcessingImage(true);
+    try {
+        // Compress image to ensure it fits in Firestore document
+        // 800px width max, 0.6 quality usually results in < 100KB
+        const compressedBase64 = await compressImage(file, 800, 0.6);
+        
         const currentImages = formData[uploadTarget] || [];
+        // Limit total images to prevent doc size explosion
+        if (currentImages.length >= 3) {
+            alert("Để đảm bảo hiệu năng, chỉ cho phép tối đa 3 ảnh mỗi mục.");
+            setIsProcessingImage(false);
+            e.target.value = '';
+            return;
+        }
+
         setFormData({ 
             ...formData, 
-            [uploadTarget]: [...currentImages, base64Img] 
+            [uploadTarget]: [...currentImages, compressedBase64] 
         });
+    } catch (error) {
+        console.error("Compression error:", error);
+        alert("Lỗi khi xử lý ảnh.");
+    } finally {
+        setIsProcessingImage(false);
         e.target.value = ''; 
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const stopCamera = () => {
@@ -545,18 +605,25 @@ function IncidentTrackerContent() {
     if (!videoRef.current) return;
     
     const canvas = document.createElement('canvas');
-    const scale = 800 / videoRef.current.videoWidth;
+    const scale = 800 / videoRef.current.videoWidth; // Resize to max 800px width
     canvas.width = 800;
     canvas.height = videoRef.current.videoHeight * scale;
     
     const ctx = canvas.getContext('2d');
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
     
-    const base64Img = canvas.toDataURL('image/jpeg', 0.7);
+    // Compress quality to 0.6
+    const base64Img = canvas.toDataURL('image/jpeg', 0.6);
     
     const targetField = cameraMode === 'before' ? 'imagesBefore' : 'imagesAfter';
     const currentImages = formData[targetField] || [];
     
+    if (currentImages.length >= 3) {
+        alert("Để đảm bảo hiệu năng, chỉ cho phép tối đa 3 ảnh mỗi mục.");
+        stopCamera();
+        return;
+    }
+
     setFormData({ 
         ...formData, 
         [targetField]: [...currentImages, base64Img] 
@@ -1018,8 +1085,8 @@ function IncidentTrackerContent() {
                                 <Camera className="mb-1 w-6 h-6" />
                                 <span className="text-[10px] font-medium">Chụp ảnh</span>
                             </div>
-                            <div onClick={() => triggerUpload('imagesBefore')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition bg-white`}>
-                                <Upload className="mb-1 w-6 h-6" />
+                            <div onClick={() => triggerUpload('imagesBefore')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition bg-white ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                                {isProcessingImage ? <Activity className="animate-spin mb-1 w-6 h-6"/> : <Upload className="mb-1 w-6 h-6" />}
                                 <span className="text-[10px] font-medium">Tải ảnh</span>
                             </div>
                         </div>
@@ -1047,8 +1114,8 @@ function IncidentTrackerContent() {
                                     <Camera className="mb-1 w-6 h-6" />
                                     <span className="text-[10px] font-medium">Chụp ảnh</span>
                                 </div>
-                                <div onClick={() => triggerUpload('imagesAfter')} className="cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition">
-                                    <Upload className="mb-1 w-6 h-6" />
+                                <div onClick={() => triggerUpload('imagesAfter')} className={`cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    {isProcessingImage ? <Activity className="animate-spin mb-1 w-6 h-6"/> : <Upload className="mb-1 w-6 h-6" />}
                                     <span className="text-[10px] font-medium">Tải ảnh</span>
                                 </div>
                             </div>
@@ -1077,7 +1144,7 @@ function IncidentTrackerContent() {
 }
 
 // ==========================================
-// 7. WRAPPER WITH ERROR BOUNDARY
+// 8. WRAPPER WITH ERROR BOUNDARY
 // ==========================================
 
 export default function IncidentApp() {
