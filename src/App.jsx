@@ -773,11 +773,11 @@ function IncidentTrackerContent() {
             </div>
             
             <div className="flex gap-2 w-full md:w-auto">
-                {incidents.length === 0 && (
+                {/* {incidents.length === 0 && (
                   <button onClick={generateMockData} disabled={generatingMock} className="whitespace-nowrap bg-white text-blue-600 border border-blue-200 px-4 py-2 rounded-lg shadow-sm hover:bg-blue-50 transition flex items-center justify-center gap-2 text-sm font-medium">
                       <Database size={16} /> {generatingMock ? 'Đang tạo...' : 'Tạo dữ liệu mẫu'}
                   </button>
-                )}
+                )} */}
                 
                 <button 
                     onClick={() => { 
