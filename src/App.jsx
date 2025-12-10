@@ -30,7 +30,8 @@ import {
   Repeat, BarChart2, Phone, Calendar, MessageSquare,
   Lock, LogOut, UserCheck, Mail, RefreshCw, Copy, Layers,
   Aperture, Upload, Eye, PieChart, TrendingUp, AlertOctagon,
-  Timer, Shield, ShieldAlert, Key, Settings, UserCog, Edit3
+  Timer, Shield, ShieldAlert, Key, Settings, UserCog, Edit3,
+  Send, History, MessageCircle
 } from 'lucide-react';
 
 // ==========================================
@@ -151,9 +152,35 @@ const IncidentService = {
     }, onError);
   },
 
+  // --- ACTIVITY LOGS & COMMENTS ---
+  subscribeToActivities: (incidentId, onData) => {
+    const path = typeof __app_id !== 'undefined' ? `artifacts/${appId}/public/data/activities` : 'activities';
+    const q = query(collection(db, path)); // Lấy hết rồi filter ở client vì hạn chế index
+    return onSnapshot(q, (snapshot) => {
+        const activities = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.incidentId === incidentId) {
+                activities.push({ id: doc.id, ...data });
+            }
+        });
+        // Sort theo thời gian tạo (Mới nhất ở cuối hoặc đầu tùy view, ở đây sort cũ -> mới để hiển thị giống chat)
+        activities.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+        onData(activities);
+    });
+  },
+
+  addActivity: async (data) => {
+    const path = typeof __app_id !== 'undefined' ? `artifacts/${appId}/public/data/activities` : 'activities';
+    return await addDoc(collection(db, path), {
+        ...data,
+        createdAt: serverTimestamp()
+    });
+  },
+
   create: async (data, user) => {
     const path = typeof __app_id !== 'undefined' ? `artifacts/${appId}/public/data/incidents` : 'incidents';
-    return await addDoc(collection(db, path), {
+    const docRef = await addDoc(collection(db, path), {
       ...data,
       status: 'NEW',
       createdAt: serverTimestamp(),
@@ -161,14 +188,44 @@ const IncidentService = {
       imagesBefore: data.imagesBefore || [], 
       imagesAfter: data.imagesAfter || []
     });
+
+    // Auto Log "Created"
+    await IncidentService.addActivity({
+        incidentId: docRef.id,
+        type: 'SYSTEM',
+        content: `đã tạo báo cáo sự cố mới.`,
+        user: { name: user.name, uid: user.uid, role: user.role }
+    });
+
+    return docRef;
   },
 
-  update: async (id, data) => {
+  update: async (id, data, oldData, user) => {
     const path = typeof __app_id !== 'undefined' ? `artifacts/${appId}/public/data/incidents` : 'incidents';
-    return await updateDoc(doc(db, path, id), {
+    await updateDoc(doc(db, path, id), {
       ...data,
       updatedAt: serverTimestamp()
     });
+
+    // Auto Log Changes
+    if (oldData) {
+        if (data.status && data.status !== oldData.status) {
+            await IncidentService.addActivity({
+                incidentId: id,
+                type: 'SYSTEM',
+                content: `đã chuyển trạng thái từ ${STATUS[oldData.status]?.label} sang ${STATUS[data.status]?.label}.`,
+                user: { name: user.name, uid: user.uid, role: user.role }
+            });
+        }
+        if (data.assignee && data.assignee !== oldData.assignee) {
+            await IncidentService.addActivity({
+                incidentId: id,
+                type: 'SYSTEM',
+                content: `đã phân công cho kỹ thuật viên: ${data.assignee}.`,
+                user: { name: user.name, uid: user.uid, role: user.role }
+            });
+        }
+    }
   },
 
   generateMockData: async (mockDataList, user) => {
@@ -287,6 +344,18 @@ const formatDateTime = (dateString) => {
     hour: '2-digit',
     minute: '2-digit'
   }).format(date);
+};
+
+const formatTimeAgo = (timestamp) => {
+    if (!timestamp) return '';
+    const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000); // seconds
+
+    if (diff < 60) return 'Vừa xong';
+    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+    return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date);
 };
 
 const getCurrentLocalTime = () => {
@@ -412,6 +481,12 @@ function IncidentTrackerContent() {
   const [passwordFormData, setPasswordFormData] = useState({ current: '', new: '', confirm: '' });
   const [actionLoading, setActionLoading] = useState(false);
 
+  // --- ACTIVITY & TAB STATE ---
+  const [activeTab, setActiveTab] = useState('info'); // 'info' | 'activity'
+  const [activities, setActivities] = useState([]);
+  const [commentText, setCommentText] = useState('');
+  const [isSendingComment, setIsSendingComment] = useState(false);
+
   // --- CAMERA & UPLOAD STATE ---
   const videoRef = useRef(null);
   const fileInputRef = useRef(null); 
@@ -467,6 +542,17 @@ function IncidentTrackerContent() {
         unsubProjects();
     };
   }, [appUser]);
+
+  // Subscribe to activities when detailed view opens
+  useEffect(() => {
+    if (view === 'detail' && selectedIncident?.id) {
+        setActiveTab('info'); // Reset tab default
+        const unsub = IncidentService.subscribeToActivities(selectedIncident.id, (data) => {
+            setActivities(data);
+        });
+        return () => unsub();
+    }
+  }, [view, selectedIncident]);
 
   // --- PROFILE HANDLERS ---
   const openProfileModal = () => {
@@ -541,6 +627,26 @@ function IncidentTrackerContent() {
     }
   };
 
+  // --- COMMENT HANDLER ---
+  const handleSendComment = async () => {
+    if (!commentText.trim() || !selectedIncident) return;
+    setIsSendingComment(true);
+    try {
+        await IncidentService.addActivity({
+            incidentId: selectedIncident.id,
+            type: 'COMMENT',
+            content: commentText,
+            user: { name: appUser.name, uid: appUser.uid, role: appUser.role }
+        });
+        setCommentText('');
+    } catch (error) {
+        console.error("Comment error:", error);
+        alert("Không thể gửi bình luận");
+    } finally {
+        setIsSendingComment(false);
+    }
+  };
+
   // --- EXISTING HANDLERS ---
   const handleLogin = async () => {
     setLoginError('');
@@ -593,7 +699,7 @@ function IncidentTrackerContent() {
   const handleUpdate = async () => {
     if (!selectedIncident) return;
     try {
-        await IncidentService.update(selectedIncident.id, formData);
+        await IncidentService.update(selectedIncident.id, formData, selectedIncident, appUser);
         setView('list');
         setSelectedIncident(null);
         setFormData({});
@@ -1368,7 +1474,6 @@ function IncidentTrackerContent() {
     if (isEdit && selectedIncident && appUser) {
         const isManager = appUser.role === 'MANAGER';
         const isCreator = selectedIncident.createdBy === appUser.uid;
-        // Kiểm tra assignee bằng tên (vì cấu trúc dữ liệu hiện tại lưu tên)
         const isAssignee = selectedIncident.assignee === appUser.name; 
         
         if (isManager || isCreator || isAssignee) {
@@ -1379,6 +1484,59 @@ function IncidentTrackerContent() {
     }
 
     const isReadOnly = !canEdit;
+
+    // --- ACTIVITY FEED RENDERER ---
+    const renderActivityFeed = () => (
+        <div className="space-y-6">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-2">
+                <input 
+                    type="text" 
+                    value={commentText} 
+                    onChange={(e) => setCommentText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendComment()}
+                    placeholder="Viết bình luận..." 
+                    className="flex-grow bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <button 
+                    onClick={handleSendComment} 
+                    disabled={!commentText.trim() || isSendingComment}
+                    className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                >
+                    <Send size={18} />
+                </button>
+            </div>
+
+            <div className="space-y-4">
+                {activities.length === 0 ? (
+                    <p className="text-center text-gray-400 text-sm py-8">Chưa có hoạt động nào.</p>
+                ) : (
+                    activities.slice().reverse().map(act => (
+                        <div key={act.id} className={`flex gap-3 ${act.type === 'SYSTEM' ? 'items-center opacity-75' : 'items-start'}`}>
+                            {act.type === 'SYSTEM' ? (
+                                <div className="min-w-[2px] h-full bg-gray-200 mx-4 self-stretch"></div>
+                            ) : (
+                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs flex-shrink-0">
+                                    {act.user?.name?.charAt(0) || 'U'}
+                                </div>
+                            )}
+                            
+                            <div className={`flex-grow ${act.type === 'SYSTEM' ? 'text-xs text-gray-500 italic' : 'bg-white p-3 rounded-lg border border-gray-100 shadow-sm'}`}>
+                                <div className="flex justify-between items-start mb-1">
+                                    <span className={`font-bold ${act.type === 'SYSTEM' ? 'text-gray-600' : 'text-gray-800 text-sm'}`}>
+                                        {act.user?.name || 'Hệ thống'}
+                                    </span>
+                                    <span className="text-[10px] text-gray-400">{formatTimeAgo(act.createdAt)}</span>
+                                </div>
+                                <p className={`text-sm ${act.type === 'SYSTEM' ? 'text-gray-500' : 'text-gray-700'}`}>
+                                    {act.content}
+                                </p>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
 
     return (
     <div className="min-h-screen bg-gray-50 pb-10">
@@ -1391,7 +1549,7 @@ function IncidentTrackerContent() {
         className="hidden" 
       />
 
-      {/* ... existing code (Top Bar) ... */}
+      {/* Top Bar */}
       <div className="bg-white border-b sticky top-0 z-20 shadow-sm">
          <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
             <button onClick={() => setView('list')} className="flex items-center text-gray-600 hover:text-blue-600 transition">
@@ -1406,240 +1564,223 @@ function IncidentTrackerContent() {
                      </span>
                  )}
             </div>
-            
             <div className="w-20 text-right">
                 {isEdit && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">ID: {selectedIncident?.id?.slice(0,4)}</span>}
             </div>
          </div>
+         
+         {/* TABS NAVIGATION (Only in Edit Mode) */}
+         {isEdit && (
+             <div className="max-w-4xl mx-auto px-4 flex border-t">
+                 <button 
+                    onClick={() => setActiveTab('info')}
+                    className={`flex-1 py-3 text-sm font-medium border-b-2 transition ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                 >
+                    Thông tin chi tiết
+                 </button>
+                 <button 
+                    onClick={() => setActiveTab('activity')}
+                    className={`flex-1 py-3 text-sm font-medium border-b-2 transition flex items-center justify-center gap-2 ${activeTab === 'activity' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                 >
+                    <MessageSquare size={16}/> Thảo luận & Lịch sử
+                 </button>
+             </div>
+         )}
       </div>
       
       {/* Thông báo quyền hạn nếu bị khóa */}
-      {isReadOnly && (
+      {isReadOnly && activeTab === 'info' && (
           <div className="max-w-4xl mx-auto px-4 mt-4">
               <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-lg flex items-start text-sm">
                   <ShieldAlert size={16} className="mt-0.5 mr-2 flex-shrink-0" />
                   <span>
-                      <strong>Chế độ chỉ xem:</strong> Bạn không có quyền chỉnh sửa sự cố này. Chỉ người tạo, người được phân công hoặc quản lý mới có thể cập nhật.
+                      <strong>Chế độ chỉ xem:</strong> Bạn không có quyền chỉnh sửa sự cố này.
                   </span>
               </div>
           </div>
       )}
 
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 space-y-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 text-xs">1</span>
-                        Thông tin sự cố
-                    </h3>
-                    <InputField label="Tiêu đề sự cố" value={formData.title || ''} onChange={v => setFormData({...formData, title: v})} required placeholder="VD: Mất kết nối máy chủ tầng 3" disabled={isReadOnly}/>
-                    
-                    {/* Thêm trường thời gian xảy ra */}
-                    <InputField 
-                        label="Thời gian xảy ra/báo cáo" 
-                        type="datetime-local"
-                        value={formData.incidentTime || ''} 
-                        onChange={v => setFormData({...formData, incidentTime: v})} 
-                        required 
-                        disabled={isReadOnly}
-                    />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SelectField 
-                            label="Dự án" 
-                            value={formData.project || ''} 
-                            onChange={v => setFormData({...formData, project: v, area: ''})} 
-                            options={Object.keys(projectsConfig)} 
+        
+        {/* Render Content based on Tab */}
+        {activeTab === 'activity' ? (
+            renderActivityFeed()
+        ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-6">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center">
+                            <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 text-xs">1</span>
+                            Thông tin sự cố
+                        </h3>
+                        <InputField label="Tiêu đề sự cố" value={formData.title || ''} onChange={v => setFormData({...formData, title: v})} required placeholder="VD: Mất kết nối máy chủ tầng 3" disabled={isReadOnly}/>
+                        
+                        <InputField 
+                            label="Thời gian xảy ra/báo cáo" 
+                            type="datetime-local"
+                            value={formData.incidentTime || ''} 
+                            onChange={v => setFormData({...formData, incidentTime: v})} 
                             required 
                             disabled={isReadOnly}
                         />
-                        <SelectField 
-                            label="Khu vực" 
-                            value={formData.area || ''} 
-                            onChange={v => setFormData({...formData, area: v})} 
-                            options={formData.project ? projectsConfig[formData.project] || [] : []} 
-                            required 
-                            disabled={!formData.project || isReadOnly} 
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SelectField label="Loại sự cố" value={formData.type || ''} onChange={v => setFormData({...formData, type: v})} options={TYPES} disabled={isReadOnly} />
-                        <SelectField label="Tần suất lặp lại" value={formData.frequency || 'NONE'} onChange={v => setFormData({...formData, frequency: v})} options={Object.keys(FREQUENCIES).map(k => ({ value: k, label: FREQUENCIES[k].label }))} disabled={isReadOnly} />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SelectField label="Mức độ" value={formData.severity || ''} onChange={v => setFormData({...formData, severity: v})} options={Object.keys(SEVERITY).map(k => ({ value: k, label: SEVERITY[k].label }))} disabled={isReadOnly} />
-                        <SelectField label="Độ ưu tiên" value={formData.priority || ''} onChange={v => setFormData({...formData, priority: v})} options={Object.keys(PRIORITY).map(k => ({ value: k, label: PRIORITY[k].label }))} disabled={isReadOnly} />
-                    </div>
-                    <InputField label="Mô tả chi tiết" type="textarea" value={formData.description || ''} onChange={v => setFormData({...formData, description: v})} placeholder="Mô tả hiện tượng, vị trí cụ thể..." disabled={isReadOnly} />
-                </div>
-                
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 text-xs">2</span>
-                        Thông tin liên hệ
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Người báo cáo" value={formData.reporter || ''} onChange={v => setFormData({...formData, reporter: v})} placeholder="Tên người báo" icon={User} disabled={isReadOnly} />
-                        <InputField label="SĐT Người báo" value={formData.reporterPhone || ''} onChange={v => setFormData({...formData, reporterPhone: v})} placeholder="09xx..." icon={Phone} disabled={isReadOnly} />
-                    </div>
-                    <div className="p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                        <p className="text-xs font-semibold text-gray-500 mb-3 uppercase">Liên hệ hiện trường (Nếu khác người báo)</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <InputField label="Người liên hệ" value={formData.contactPerson || ''} onChange={v => setFormData({...formData, contactPerson: v})} placeholder="Tên người tại chỗ" icon={User} disabled={isReadOnly} />
-                            <InputField label="SĐT Hiện trường" value={formData.contactPhone || ''} onChange={v => setFormData({...formData, contactPhone: v})} placeholder="09xx..." icon={Phone} disabled={isReadOnly} />
-                        </div>
-                    </div>
-                </div>
 
-                {/* Phần Xử Lý - Luôn hiển thị nếu là Edit để xem, nhưng disable nếu ko có quyền */}
-                {isEdit && (
-                <div className={`bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-t-4 ${isReadOnly ? 'border-t-gray-300' : 'border-t-blue-500'}`}>
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center justify-between">
-                        <div className="flex items-center">
-                            <span className={`w-6 h-6 rounded-full ${isReadOnly ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-600'} flex items-center justify-center mr-2 text-xs`}>3</span>
-                            Đánh giá & Kế hoạch xử lý
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <SelectField 
+                                label="Dự án" 
+                                value={formData.project || ''} 
+                                onChange={v => setFormData({...formData, project: v, area: ''})} 
+                                options={Object.keys(projectsConfig)} 
+                                required 
+                                disabled={isReadOnly}
+                            />
+                            <SelectField 
+                                label="Khu vực" 
+                                value={formData.area || ''} 
+                                onChange={v => setFormData({...formData, area: v})} 
+                                options={formData.project ? projectsConfig[formData.project] || [] : []} 
+                                required 
+                                disabled={!formData.project || isReadOnly} 
+                            />
                         </div>
-                        <span className={`text-xs ${isReadOnly ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'} px-2 py-1 rounded`}>Dành cho kỹ thuật</span>
-                    </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <SelectField label="Loại sự cố" value={formData.type || ''} onChange={v => setFormData({...formData, type: v})} options={TYPES} disabled={isReadOnly} />
+                            <SelectField label="Tần suất lặp lại" value={formData.frequency || 'NONE'} onChange={v => setFormData({...formData, frequency: v})} options={Object.keys(FREQUENCIES).map(k => ({ value: k, label: FREQUENCIES[k].label }))} disabled={isReadOnly} />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <SelectField label="Mức độ" value={formData.severity || ''} onChange={v => setFormData({...formData, severity: v})} options={Object.keys(SEVERITY).map(k => ({ value: k, label: SEVERITY[k].label }))} disabled={isReadOnly} />
+                            <SelectField label="Độ ưu tiên" value={formData.priority || ''} onChange={v => setFormData({...formData, priority: v})} options={Object.keys(PRIORITY).map(k => ({ value: k, label: PRIORITY[k].label }))} disabled={isReadOnly} />
+                        </div>
+                        <InputField label="Mô tả chi tiết" type="textarea" value={formData.description || ''} onChange={v => setFormData({...formData, description: v})} placeholder="Mô tả hiện tượng, vị trí cụ thể..." disabled={isReadOnly} />
+                    </div>
                     
-                    <div className={`${isReadOnly ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-100'} p-4 rounded-lg border mb-4`}>
-                        <h4 className={`text-sm font-bold ${isReadOnly ? 'text-gray-600' : 'text-blue-800'} mb-3 flex items-center`}><MessageSquare size={16} className="mr-2"/> Thông tin phản hồi cho khách hàng</h4>
-                        <InputField label="Đánh giá sơ bộ" type="textarea" value={formData.preliminaryAssessment || ''} onChange={v => setFormData({...formData, preliminaryAssessment: v})} placeholder="Nhận định ban đầu về lỗi..." disabled={isReadOnly} />
-                         
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <InputField label="Thời gian dự kiến (ETA)" value={formData.estimatedTime || ''} onChange={v => setFormData({...formData, estimatedTime: v})} placeholder="VD: 14h00 hôm nay" icon={Calendar} disabled={isReadOnly} />
-                             
-                             <InputField 
-                                label="Kỹ thuật viên phụ trách" 
-                                value={formData.assignee || ''} 
-                                onChange={v => setFormData({...formData, assignee: v})} 
-                                placeholder="Tên kỹ thuật viên" 
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center">
+                            <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 text-xs">2</span>
+                            Thông tin liên hệ
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <InputField label="Người báo cáo" value={formData.reporter || ''} onChange={v => setFormData({...formData, reporter: v})} placeholder="Tên người báo" icon={User} disabled={isReadOnly} />
+                            <InputField label="SĐT Người báo" value={formData.reporterPhone || ''} onChange={v => setFormData({...formData, reporterPhone: v})} placeholder="09xx..." icon={Phone} disabled={isReadOnly} />
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                            <p className="text-xs font-semibold text-gray-500 mb-3 uppercase">Liên hệ hiện trường (Nếu khác người báo)</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <InputField label="Người liên hệ" value={formData.contactPerson || ''} onChange={v => setFormData({...formData, contactPerson: v})} placeholder="Tên người tại chỗ" icon={User} disabled={isReadOnly} />
+                                <InputField label="SĐT Hiện trường" value={formData.contactPhone || ''} onChange={v => setFormData({...formData, contactPhone: v})} placeholder="09xx..." icon={Phone} disabled={isReadOnly} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {isEdit && (
+                    <div className={`bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-t-4 ${isReadOnly ? 'border-t-gray-300' : 'border-t-blue-500'}`}>
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center justify-between">
+                            <div className="flex items-center">
+                                <span className={`w-6 h-6 rounded-full ${isReadOnly ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-600'} flex items-center justify-center mr-2 text-xs`}>3</span>
+                                Đánh giá & Kế hoạch xử lý
+                            </div>
+                            <span className={`text-xs ${isReadOnly ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'} px-2 py-1 rounded`}>Dành cho kỹ thuật</span>
+                        </h3>
+                        
+                        <div className={`${isReadOnly ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-100'} p-4 rounded-lg border mb-4`}>
+                            <h4 className={`text-sm font-bold ${isReadOnly ? 'text-gray-600' : 'text-blue-800'} mb-3 flex items-center`}><MessageSquare size={16} className="mr-2"/> Thông tin phản hồi cho khách hàng</h4>
+                            <InputField label="Đánh giá sơ bộ" type="textarea" value={formData.preliminaryAssessment || ''} onChange={v => setFormData({...formData, preliminaryAssessment: v})} placeholder="Nhận định ban đầu về lỗi..." disabled={isReadOnly} />
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <InputField label="Thời gian dự kiến (ETA)" value={formData.estimatedTime || ''} onChange={v => setFormData({...formData, estimatedTime: v})} placeholder="VD: 14h00 hôm nay" icon={Calendar} disabled={isReadOnly} />
+                                
+                                <InputField 
+                                    label="Kỹ thuật viên phụ trách" 
+                                    value={formData.assignee || ''} 
+                                    onChange={v => setFormData({...formData, assignee: v})} 
+                                    placeholder="Tên kỹ thuật viên" 
+                                    icon={User}
+                                    disabled={isReadOnly}
+                                    action={
+                                        !isReadOnly && !formData.assignee && (
+                                            <button onClick={() => assignToMe('assignee', 'assigneePhone')} className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 flex items-center">
+                                                <UserCheck size={12} className="mr-1"/> Tôi nhận việc này
+                                            </button>
+                                        )
+                                    }
+                                />
+                            </div>
+                            <InputField label="SĐT Kỹ thuật viên" value={formData.assigneePhone || ''} onChange={v => setFormData({...formData, assigneePhone: v})} placeholder="Số điện thoại liên hệ kỹ thuật" icon={Phone} disabled={isReadOnly} />
+                        </div>
+
+                        <h4 className="text-sm font-bold text-gray-700 mb-3 mt-4">Chi tiết kỹ thuật (Nội bộ)</h4>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <InputField 
+                                label="Người tiếp nhận" 
+                                value={formData.receiver || ''} 
+                                onChange={v => setFormData({...formData, receiver: v})} 
+                                placeholder="Người nhận ticket" 
                                 icon={User}
                                 disabled={isReadOnly}
                                 action={
-                                    !isReadOnly && !formData.assignee && (
-                                        <button onClick={() => assignToMe('assignee', 'assigneePhone')} className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 flex items-center">
-                                            <UserCheck size={12} className="mr-1"/> Tôi nhận việc này
+                                    !isReadOnly && !formData.receiver && (
+                                        <button onClick={() => assignToMe('receiver', 'receiverPhone')} className="text-xs text-blue-600 hover:underline">
+                                            Điền tên tôi
                                         </button>
                                     )
                                 }
                             />
-                         </div>
-                         <InputField label="SĐT Kỹ thuật viên" value={formData.assigneePhone || ''} onChange={v => setFormData({...formData, assigneePhone: v})} placeholder="Số điện thoại liên hệ kỹ thuật" icon={Phone} disabled={isReadOnly} />
-                    </div>
-
-                    <h4 className="text-sm font-bold text-gray-700 mb-3 mt-4">Chi tiết kỹ thuật (Nội bộ)</h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField 
-                            label="Người tiếp nhận" 
-                            value={formData.receiver || ''} 
-                            onChange={v => setFormData({...formData, receiver: v})} 
-                            placeholder="Người nhận ticket" 
-                            icon={User}
-                            disabled={isReadOnly}
-                            action={
-                                !isReadOnly && !formData.receiver && (
-                                    <button onClick={() => assignToMe('receiver', 'receiverPhone')} className="text-xs text-blue-600 hover:underline">
-                                        Điền tên tôi
-                                    </button>
-                                )
-                            }
-                        />
-                         {/* Thêm trường thời gian thực hiện */}
-                         <InputField 
-                            label="Thời gian thực hiện (Xong)" 
-                            type="datetime-local"
-                            value={formData.processingTime || ''} 
-                            onChange={v => setFormData({...formData, processingTime: v})} 
-                            disabled={isReadOnly}
-                        />
-                    </div>
-
-                    <InputField label="Nguyên nhân gốc rễ" type="textarea" value={formData.rootCause || ''} onChange={v => setFormData({...formData, rootCause: v})} placeholder="Tại sao sự cố xảy ra?" disabled={isReadOnly} />
-                    <InputField label="Cách xử lý" type="textarea" value={formData.resolution || ''} onChange={v => setFormData({...formData, resolution: v})} placeholder="Các bước đã thực hiện..." disabled={isReadOnly} />
-
-                    <div className="border-t pt-4 mt-4 bg-gray-100 p-4 rounded-lg">
-                        <SelectField label="Kết quả xử lý" value={formData.status || 'NEW'} onChange={v => setFormData({...formData, status: v})} options={Object.keys(STATUS).map(k => ({ value: k, label: STATUS[k].label }))} required disabled={isReadOnly} />
-                        {formData.status === 'INCOMPLETE' && (
-                        <InputField label="Lý do chưa hoàn thành" value={formData.incompleteReason || ''} onChange={v => setFormData({...formData, incompleteReason: v})} required placeholder="Thiếu vật tư, cần vendor hỗ trợ..." disabled={isReadOnly} />
-                        )}
-                    </div>
-                </div>
-                )}
-            </div>
-
-            <div className="space-y-6">
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 sticky top-24">
-                    <h3 className="font-bold text-gray-800 mb-4">Hành động</h3>
-                    
-                    {/* Chỉ hiển thị nút Cập Nhật / Gửi nếu được phép Edit */}
-                    {!isReadOnly && (
-                        <button onClick={isEdit ? handleUpdate : handleCreate} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2 mb-3">
-                            <Save size={18} /> {isEdit ? 'Cập Nhật' : 'Gửi Báo Cáo'}
-                        </button>
-                    )}
-
-                    {/* Chỉ cho phép Clone nếu có quyền Edit hoặc xem (tùy nghiệp vụ, ở đây tạm cho phép Clone nếu có quyền xem để tạo mới dựa trên cũ, vì tạo mới thì ai cũng đc) */}
-                    {isEdit && (
-                        <button onClick={handleClone} className="w-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium py-3 rounded-lg hover:bg-indigo-100 transition flex items-center justify-center gap-2 mb-3">
-                            <Copy size={18} /> Nhân bản sự cố này
-                        </button>
-                    )}
-
-                    <button onClick={() => setView('list')} className="w-full bg-white text-gray-600 border border-gray-300 font-medium py-3 rounded-lg hover:bg-gray-50 transition">
-                        {isReadOnly ? 'Đóng' : 'Hủy bỏ'}
-                    </button>
-                </div>
-
-                {/* Media Panel */}
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-800 mb-4 text-sm uppercase">Hình ảnh đính kèm</h3>
-                    
-                    <div className="mb-6">
-                        <label className="block text-xs font-medium text-gray-500 mb-2">ẢNH HIỆN TRƯỜNG (TRƯỚC)</label>
-                        <div className="flex gap-2 flex-wrap mb-2">
-                            {formData.imagesBefore?.map((img, idx) => (
-                                <div key={idx} className="relative group">
-                                    <img src={img} alt="Before" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
-                                    {!isReadOnly && (
-                                        <button 
-                                            onClick={() => setFormData({...formData, imagesBefore: formData.imagesBefore.filter((_, i) => i !== idx)})}
-                                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
-                                        >
-                                            <X size={12} />
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
+                            <InputField 
+                                label="Thời gian thực hiện (Xong)" 
+                                type="datetime-local"
+                                value={formData.processingTime || ''} 
+                                onChange={v => setFormData({...formData, processingTime: v})} 
+                                disabled={isReadOnly}
+                            />
                         </div>
+
+                        <InputField label="Nguyên nhân gốc rễ" type="textarea" value={formData.rootCause || ''} onChange={v => setFormData({...formData, rootCause: v})} placeholder="Tại sao sự cố xảy ra?" disabled={isReadOnly} />
+                        <InputField label="Cách xử lý" type="textarea" value={formData.resolution || ''} onChange={v => setFormData({...formData, resolution: v})} placeholder="Các bước đã thực hiện..." disabled={isReadOnly} />
+
+                        <div className="border-t pt-4 mt-4 bg-gray-100 p-4 rounded-lg">
+                            <SelectField label="Kết quả xử lý" value={formData.status || 'NEW'} onChange={v => setFormData({...formData, status: v})} options={Object.keys(STATUS).map(k => ({ value: k, label: STATUS[k].label }))} required disabled={isReadOnly} />
+                            {formData.status === 'INCOMPLETE' && (
+                            <InputField label="Lý do chưa hoàn thành" value={formData.incompleteReason || ''} onChange={v => setFormData({...formData, incompleteReason: v})} required placeholder="Thiếu vật tư, cần vendor hỗ trợ..." disabled={isReadOnly} />
+                            )}
+                        </div>
+                    </div>
+                    )}
+                </div>
+
+                <div className="space-y-6">
+                    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 sticky top-24">
+                        <h3 className="font-bold text-gray-800 mb-4">Hành động</h3>
                         
                         {!isReadOnly && (
-                            <div className="grid grid-cols-2 gap-2">
-                                <div onClick={() => startCamera('before')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 transition bg-white`}>
-                                    <Camera className="mb-1 w-6 h-6" />
-                                    <span className="text-[10px] font-medium">Chụp ảnh</span>
-                                </div>
-                                <div onClick={() => triggerUpload('imagesBefore')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition bg-white ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    {isProcessingImage ? <Activity className="animate-spin mb-1 w-6 h-6"/> : <Upload className="mb-1 w-6 h-6" />}
-                                    <span className="text-[10px] font-medium">Tải ảnh</span>
-                                </div>
-                            </div>
+                            <button onClick={isEdit ? handleUpdate : handleCreate} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2 mb-3">
+                                <Save size={18} /> {isEdit ? 'Cập Nhật' : 'Gửi Báo Cáo'}
+                            </button>
                         )}
-                        {isReadOnly && formData.imagesBefore?.length === 0 && <p className="text-xs text-gray-400 italic">Không có ảnh</p>}
+
+                        {isEdit && (
+                            <button onClick={handleClone} className="w-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium py-3 rounded-lg hover:bg-indigo-100 transition flex items-center justify-center gap-2 mb-3">
+                                <Copy size={18} /> Nhân bản sự cố này
+                            </button>
+                        )}
+
+                        <button onClick={() => setView('list')} className="w-full bg-white text-gray-600 border border-gray-300 font-medium py-3 rounded-lg hover:bg-gray-50 transition">
+                            {isReadOnly ? 'Đóng' : 'Hủy bỏ'}
+                        </button>
                     </div>
 
-                    {isEdit && (
-                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-2">ẢNH KẾT QUẢ (SAU)</label>
+                    {/* Media Panel */}
+                    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                        <h3 className="font-bold text-gray-800 mb-4 text-sm uppercase">Hình ảnh đính kèm</h3>
+                        
+                        <div className="mb-6">
+                            <label className="block text-xs font-medium text-gray-500 mb-2">ẢNH HIỆN TRƯỜNG (TRƯỚC)</label>
                             <div className="flex gap-2 flex-wrap mb-2">
-                                {formData.imagesAfter?.map((img, idx) => (
+                                {formData.imagesBefore?.map((img, idx) => (
                                     <div key={idx} className="relative group">
-                                        <img src={img} alt="After" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                                        <img src={img} alt="Before" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
                                         {!isReadOnly && (
                                             <button 
-                                                onClick={() => setFormData({...formData, imagesAfter: formData.imagesAfter.filter((_, i) => i !== idx)})}
+                                                onClick={() => setFormData({...formData, imagesBefore: formData.imagesBefore.filter((_, i) => i !== idx)})}
                                                 className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
                                             >
                                                 <X size={12} />
@@ -1651,23 +1792,57 @@ function IncidentTrackerContent() {
                             
                             {!isReadOnly && (
                                 <div className="grid grid-cols-2 gap-2">
-                                    <div onClick={() => startCamera('after')} className="cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 transition">
+                                    <div onClick={() => startCamera('before')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 transition bg-white`}>
                                         <Camera className="mb-1 w-6 h-6" />
                                         <span className="text-[10px] font-medium">Chụp ảnh</span>
                                     </div>
-                                    <div onClick={() => triggerUpload('imagesAfter')} className={`cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    <div onClick={() => triggerUpload('imagesBefore')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition bg-white ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
                                         {isProcessingImage ? <Activity className="animate-spin mb-1 w-6 h-6"/> : <Upload className="mb-1 w-6 h-6" />}
                                         <span className="text-[10px] font-medium">Tải ảnh</span>
                                     </div>
                                 </div>
                             )}
-                            {isReadOnly && formData.imagesAfter?.length === 0 && <p className="text-xs text-gray-400 italic">Không có ảnh</p>}
+                            {isReadOnly && formData.imagesBefore?.length === 0 && <p className="text-xs text-gray-400 italic">Không có ảnh</p>}
                         </div>
-                    )}
+
+                        {isEdit && (
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-2">ẢNH KẾT QUẢ (SAU)</label>
+                                <div className="flex gap-2 flex-wrap mb-2">
+                                    {formData.imagesAfter?.map((img, idx) => (
+                                        <div key={idx} className="relative group">
+                                            <img src={img} alt="After" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                                            {!isReadOnly && (
+                                                <button 
+                                                    onClick={() => setFormData({...formData, imagesAfter: formData.imagesAfter.filter((_, i) => i !== idx)})}
+                                                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                
+                                {!isReadOnly && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div onClick={() => startCamera('after')} className="cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 transition">
+                                            <Camera className="mb-1 w-6 h-6" />
+                                            <span className="text-[10px] font-medium">Chụp ảnh</span>
+                                        </div>
+                                        <div onClick={() => triggerUpload('imagesAfter')} className={`cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                                            {isProcessingImage ? <Activity className="animate-spin mb-1 w-6 h-6"/> : <Upload className="mb-1 w-6 h-6" />}
+                                            <span className="text-[10px] font-medium">Tải ảnh</span>
+                                        </div>
+                                    </div>
+                                )}
+                                {isReadOnly && formData.imagesAfter?.length === 0 && <p className="text-xs text-gray-400 italic">Không có ảnh</p>}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
-
-        </div>
+        )}
       </div>
     </div>
   ); }
