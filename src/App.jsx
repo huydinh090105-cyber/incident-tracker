@@ -5,7 +5,10 @@ import {
   signInWithEmailAndPassword, 
   signOut,                   
   onAuthStateChanged,
-  signInWithCustomToken
+  signInWithCustomToken,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -27,7 +30,7 @@ import {
   Repeat, BarChart2, Phone, Calendar, MessageSquare,
   Lock, LogOut, UserCheck, Mail, RefreshCw, Copy, Layers,
   Aperture, Upload, Eye, PieChart, TrendingUp, AlertOctagon,
-  Timer, Shield, ShieldAlert
+  Timer, Shield, ShieldAlert, Key, Settings, UserCog, Edit3
 } from 'lucide-react';
 
 // ==========================================
@@ -80,6 +83,19 @@ const IncidentService = {
         console.error("Lỗi lấy profile:", e);
         return BACKUP_PROFILES.find(p => p.email === email) || null;
     }
+  },
+
+  updateUserProfile: async (email, data) => {
+    const path = typeof __app_id !== 'undefined' ? `artifacts/${appId}/public/data/users` : 'users';
+    const q = query(collection(db, path), where("email", "==", email));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+        const docRef = doc(db, path, querySnapshot.docs[0].id);
+        await updateDoc(docRef, data);
+        return true;
+    }
+    return false;
   },
 
   seedUserProfiles: async () => {
@@ -389,6 +405,13 @@ function IncidentTrackerContent() {
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [formData, setFormData] = useState({});
 
+  // --- MODAL STATES ---
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [profileFormData, setProfileFormData] = useState({});
+  const [passwordFormData, setPasswordFormData] = useState({ current: '', new: '', confirm: '' });
+  const [actionLoading, setActionLoading] = useState(false);
+
   // --- CAMERA & UPLOAD STATE ---
   const videoRef = useRef(null);
   const fileInputRef = useRef(null); 
@@ -445,6 +468,80 @@ function IncidentTrackerContent() {
     };
   }, [appUser]);
 
+  // --- PROFILE HANDLERS ---
+  const openProfileModal = () => {
+    setProfileFormData({
+        name: appUser.name,
+        phone: appUser.phone,
+        title: appUser.title
+    });
+    setShowProfileModal(true);
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!profileFormData.name) {
+        alert("Vui lòng nhập tên hiển thị");
+        return;
+    }
+    setActionLoading(true);
+    try {
+        const success = await IncidentService.updateUserProfile(appUser.email, profileFormData);
+        if (success) {
+            setAppUser(prev => ({ ...prev, ...profileFormData }));
+            alert("Cập nhật thông tin thành công!");
+            setShowProfileModal(false);
+        } else {
+            alert("Không tìm thấy hồ sơ người dùng để cập nhật.");
+        }
+    } catch (e) {
+        console.error("Update profile error:", e);
+        alert("Lỗi khi cập nhật hồ sơ: " + e.message);
+    } finally {
+        setActionLoading(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    const { current, new: newPass, confirm } = passwordFormData;
+    if (!current || !newPass || !confirm) {
+        alert("Vui lòng điền đầy đủ các trường");
+        return;
+    }
+    if (newPass !== confirm) {
+        alert("Mật khẩu mới không khớp");
+        return;
+    }
+    if (newPass.length < 6) {
+        alert("Mật khẩu mới phải có ít nhất 6 ký tự");
+        return;
+    }
+
+    setActionLoading(true);
+    try {
+        const user = auth.currentUser;
+        // Re-authenticate user
+        const credential = EmailAuthProvider.credential(user.email, current);
+        await reauthenticateWithCredential(user, credential);
+        
+        // Update password
+        await updatePassword(user, newPass);
+        
+        alert("Đổi mật khẩu thành công!");
+        setShowPasswordModal(false);
+        setPasswordFormData({ current: '', new: '', confirm: '' });
+    } catch (error) {
+        console.error("Password change error:", error);
+        if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+            alert("Mật khẩu cũ không chính xác.");
+        } else {
+            alert("Lỗi đổi mật khẩu: " + error.message);
+        }
+    } finally {
+        setActionLoading(false);
+    }
+  };
+
+  // --- EXISTING HANDLERS ---
   const handleLogin = async () => {
     setLoginError('');
     setIsLoggingIn(true);
@@ -524,8 +621,8 @@ function IncidentTrackerContent() {
         rootCause: '',
         preliminaryAssessment: '',
         estimatedTime: '',
-        processingTime: '', // Reset processing time
-        incidentTime: getCurrentLocalTime(), // Reset to now
+        processingTime: '', 
+        incidentTime: getCurrentLocalTime(), 
         imagesAfter: [], 
         incompleteReason: '',
         reporter: appUser?.name,
@@ -676,29 +773,19 @@ function IncidentTrackerContent() {
     };
 
     incidents.forEach(inc => {
-        // Status Count
         if (inc.status === 'DONE') res.done++;
-        
-        // Project Count
         const proj = inc.project || 'Chưa phân loại';
         res.byProject[proj] = (res.byProject[proj] || 0) + 1;
-
-        // Type Count
         const type = inc.type || 'Khác';
         res.byType[type] = (res.byType[type] || 0) + 1;
-
-        // Severity Count
         if (inc.severity && res.bySeverity[inc.severity] !== undefined) {
             res.bySeverity[inc.severity]++;
             if (inc.severity === 'CRITICAL') res.critical++;
         }
-
-        // Frequency Count
         if (inc.frequency && res.byFrequency[inc.frequency] !== undefined) {
             res.byFrequency[inc.frequency]++;
         }
     });
-
     return res;
   }, [incidents]);
 
@@ -724,6 +811,120 @@ function IncidentTrackerContent() {
                 <span className="bg-black/50 text-white px-3 py-1 rounded-full text-xs backdrop-blur-sm">
                     {cameraMode === 'before' ? 'Chụp ảnh hiện trường' : 'Chụp ảnh sau xử lý'}
                 </span>
+            </div>
+        </div>
+    </div>
+  );
+
+  const renderProfileModal = () => (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => !actionLoading && setShowProfileModal(false)}>
+        <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b flex justify-between items-center">
+                <h3 className="font-bold text-gray-800 text-lg flex items-center">
+                    <UserCog className="mr-2 text-blue-600"/> Hồ sơ cá nhân
+                </h3>
+                <button onClick={() => setShowProfileModal(false)} disabled={actionLoading} className="p-1 hover:bg-gray-100 rounded-full transition">
+                    <X size={20} className="text-gray-500" />
+                </button>
+            </div>
+            <div className="p-6 space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email (Không thể thay đổi)</label>
+                    <input type="text" value={appUser?.email} disabled className="w-full p-2.5 bg-gray-100 border border-gray-200 rounded-lg text-gray-500 cursor-not-allowed"/>
+                </div>
+                <InputField 
+                    label="Tên hiển thị" 
+                    value={profileFormData.name || ''} 
+                    onChange={v => setProfileFormData({...profileFormData, name: v})} 
+                    placeholder="Nguyễn Văn A"
+                    icon={User}
+                />
+                <InputField 
+                    label="Số điện thoại" 
+                    value={profileFormData.phone || ''} 
+                    onChange={v => setProfileFormData({...profileFormData, phone: v})} 
+                    placeholder="09..."
+                    icon={Phone}
+                />
+                <InputField 
+                    label="Chức danh" 
+                    value={profileFormData.title || ''} 
+                    onChange={v => setProfileFormData({...profileFormData, title: v})} 
+                    placeholder="Kỹ thuật viên..."
+                    icon={Badge}
+                />
+                
+                <div className="pt-2">
+                    <button 
+                        onClick={handleUpdateProfile} 
+                        disabled={actionLoading}
+                        className="w-full bg-blue-600 text-white font-medium py-2.5 rounded-lg hover:bg-blue-700 transition flex items-center justify-center disabled:opacity-50"
+                    >
+                        {actionLoading ? <Activity className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18} />}
+                        Lưu thay đổi
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+
+  const renderPasswordModal = () => (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => !actionLoading && setShowPasswordModal(false)}>
+        <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b flex justify-between items-center bg-red-50 rounded-t-2xl">
+                <h3 className="font-bold text-red-800 text-lg flex items-center">
+                    <Key className="mr-2"/> Đổi mật khẩu
+                </h3>
+                <button onClick={() => setShowPasswordModal(false)} disabled={actionLoading} className="p-1 hover:bg-red-100 rounded-full transition">
+                    <X size={20} className="text-red-500" />
+                </button>
+            </div>
+            <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-500 mb-2">Vui lòng nhập mật khẩu cũ để xác thực trước khi thay đổi.</p>
+                
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu hiện tại</label>
+                    <input 
+                        type="password" 
+                        value={passwordFormData.current}
+                        onChange={e => setPasswordFormData({...passwordFormData, current: e.target.value})}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                        placeholder="••••••"
+                    />
+                </div>
+                
+                <div className="border-t border-gray-100 pt-4 mt-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu mới</label>
+                    <input 
+                        type="password" 
+                        value={passwordFormData.new}
+                        onChange={e => setPasswordFormData({...passwordFormData, new: e.target.value})}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                        placeholder="••••••"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nhập lại mật khẩu mới</label>
+                    <input 
+                        type="password" 
+                        value={passwordFormData.confirm}
+                        onChange={e => setPasswordFormData({...passwordFormData, confirm: e.target.value})}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                        placeholder="••••••"
+                    />
+                </div>
+                
+                <div className="pt-2">
+                    <button 
+                        onClick={handleChangePassword} 
+                        disabled={actionLoading}
+                        className="w-full bg-red-600 text-white font-medium py-2.5 rounded-lg hover:bg-red-700 transition flex items-center justify-center disabled:opacity-50"
+                    >
+                        {actionLoading ? <Activity className="animate-spin mr-2" size={18}/> : "Xác nhận đổi mật khẩu"}
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -864,16 +1065,28 @@ function IncidentTrackerContent() {
       <div className="bg-blue-600 text-white p-6 md:p-10 md:rounded-b-3xl rounded-b-3xl shadow-lg mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between">
             <div>
-                <h1 className="text-2xl md:text-3xl font-bold">Xin chào, {appUser?.name}!</h1>
+                <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+                    Xin chào, {appUser?.name}! 
+                    <button onClick={openProfileModal} className="ml-2 bg-blue-500 hover:bg-blue-400 p-1 rounded-full transition" title="Chỉnh sửa thông tin">
+                        <Edit3 size={14} className="text-white"/>
+                    </button>
+                </h1>
                 <p className="text-blue-100 text-sm mt-1">{appUser?.title} • {appUser?.email}</p>
             </div>
-            <div className="flex items-center mt-4 md:mt-0 gap-4">
+            <div className="flex items-center mt-4 md:mt-0 gap-3">
                  <button onClick={() => setView('stats')} className="bg-blue-500 hover:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition">
                     <BarChart2 size={16} className="mr-2"/> Thống kê
                  </button>
-                 <button onClick={handleLogout} className="bg-blue-700 hover:bg-blue-800 text-white p-2 rounded-lg flex items-center transition" title="Đăng xuất">
-                    <LogOut size={20}/>
-                 </button>
+                 
+                 <div className="flex bg-blue-700 rounded-lg p-1">
+                     <button onClick={() => setShowPasswordModal(true)} className="p-2 hover:bg-blue-600 rounded text-white transition" title="Đổi mật khẩu">
+                        <Key size={18}/>
+                     </button>
+                     <div className="w-[1px] bg-blue-500 mx-1 my-1"></div>
+                     <button onClick={handleLogout} className="p-2 hover:bg-blue-600 rounded text-white transition" title="Đăng xuất">
+                        <LogOut size={18}/>
+                     </button>
+                 </div>
             </div>
         </div>
       </div>
@@ -1465,6 +1678,8 @@ function IncidentTrackerContent() {
   return (
     <div className="font-sans text-gray-900 bg-gray-100 min-h-screen w-full relative">
       {showCamera && renderCameraModal()}
+      {showProfileModal && renderProfileModal()}
+      {showPasswordModal && renderPasswordModal()}
       {previewData && renderImagePreviewModal()}
       {view === 'list' && renderDashboard()}
       {view === 'create' && renderForm(false)}
