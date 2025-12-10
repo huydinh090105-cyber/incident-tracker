@@ -31,7 +31,8 @@ import {
   Lock, LogOut, UserCheck, Mail, RefreshCw, Copy, Layers,
   Aperture, Upload, Eye, PieChart, TrendingUp, AlertOctagon,
   Timer, Shield, ShieldAlert, Key, Settings, UserCog, Edit3,
-  Send, History, MessageCircle
+  Send, History, MessageCircle,
+  HelpCircle
 } from 'lucide-react';
 
 // ==========================================
@@ -1180,6 +1181,15 @@ function IncidentTrackerContent() {
                 <p className="text-blue-100 text-sm mt-1">{appUser?.title} • {appUser?.email}</p>
             </div>
             <div className="flex items-center mt-4 md:mt-0 gap-3">
+                 <a 
+                    href="/src/UserManual.html" 
+                    target="_blank"
+                    rel="noreferrer" 
+                    className="bg-blue-500 hover:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition"
+                 >
+                    <HelpCircle size={16} className="mr-2"/> Hướng dẫn
+                 </a>
+
                  <button onClick={() => setView('stats')} className="bg-blue-500 hover:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition">
                     <BarChart2 size={16} className="mr-2"/> Thống kê
                  </button>

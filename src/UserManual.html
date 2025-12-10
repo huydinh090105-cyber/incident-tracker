@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hướng Dẫn Sử Dụng Incident Tracker - Infographic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Palette: Vibrant Blue (Energetic & Professional) -->
+    <!-- 
+        Primary: #2563EB (Blue 600)
+        Secondary: #3B82F6 (Blue 500)
+        Dark: #1E3A8A (Blue 900)
+        Accent: #F59E0B (Amber 500)
+        Background: #F3F4F6 (Gray 100)
+    -->
+    <style>
+        body { font-family: 'Roboto', sans-serif; background-color: #F3F4F6; color: #1F2937; }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container { height: 350px; }
+        }
+        .step-card { transition: transform 0.2s; }
+        .step-card:hover { transform: translateY(-5px); }
+    </style>
+    <!-- 
+    Summary of Visual Choices:
+    1. Roles: 3-Column Cards (Inform/Compare) - HTML/CSS
+    2. Status Lifecycle: Doughnut Chart (Inform/Organize) - Chart.js
+    3. Severity Levels: Bar Chart (Compare) - Chart.js
+    4. Reporting Process: Numbered Steps (Organize/Change) - HTML/CSS
+    5. Permissions: Matrix Table (Relationships) - HTML/CSS
+    
+    CONFIRMATION: NO SVG USED. NO MERMAID JS USED.
+    -->
+</head>
+<body class="bg-gray-100">
+
+    <!-- Header Section -->
+    <header class="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-8 shadow-lg">
+        <div class="max-w-6xl mx-auto text-center">
+            <h1 class="text-4xl md:text-5xl font-extrabold mb-2 uppercase tracking-wide">Incident Tracker</h1>
+            <p class="text-xl md:text-2xl font-light text-blue-100">Hệ Thống Quản Lý Sự Cố Toàn Diện</p>
+            <div class="mt-4 inline-block bg-white text-blue-800 px-6 py-2 rounded-full font-bold text-sm shadow-md">
+                Hướng Dẫn Sử Dụng & Quy Trình
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-4 space-y-12 my-8">
+
+        <!-- SECTION 1: USER ROLES -->
+        <section>
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-blue-900">1. Hệ Sinh Thái Người Dùng</h2>
+                <p class="text-gray-600 mt-2 max-w-2xl mx-auto">Hệ thống phân chia 3 vai trò rõ ràng để đảm bảo quy trình vận hành trơn tru và bảo mật. Dưới đây là thông tin đăng nhập demo.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Admin Card -->
+                <div class="bg-white rounded-xl shadow-md border-t-8 border-red-500 p-6 flex flex-col items-center text-center transform hover:scale-105 transition duration-300">
+                    <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-3xl mb-4">👑</div>
+                    <h3 class="text-xl font-bold text-gray-800">Quản Lý (Admin)</h3>
+                    <p class="text-sm text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded mt-2">admin@demo.com</p>
+                    <p class="mt-4 text-gray-600 text-sm">Toàn quyền hệ thống. Quản lý user, dự án và chỉnh sửa mọi ticket.</p>
+                </div>
+
+                <!-- Tech Card -->
+                <div class="bg-white rounded-xl shadow-md border-t-8 border-blue-500 p-6 flex flex-col items-center text-center transform hover:scale-105 transition duration-300">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-3xl mb-4">🛠️</div>
+                    <h3 class="text-xl font-bold text-gray-800">Kỹ Thuật (Tech)</h3>
+                    <p class="text-sm text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded mt-2">tech@demo.com</p>
+                    <p class="mt-4 text-gray-600 text-sm">Chuyên trách xử lý. Nhận việc, cập nhật tiến độ và báo cáo hoàn thành.</p>
+                </div>
+
+                <!-- User Card -->
+                <div class="bg-white rounded-xl shadow-md border-t-8 border-green-500 p-6 flex flex-col items-center text-center transform hover:scale-105 transition duration-300">
+                    <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-3xl mb-4">👤</div>
+                    <h3 class="text-xl font-bold text-gray-800">Nhân Viên (User)</h3>
+                    <p class="text-sm text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded mt-2">user@demo.com</p>
+                    <p class="mt-4 text-gray-600 text-sm">Người phát hiện và báo cáo sự cố. Theo dõi trạng thái các lỗi đã báo.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: DATA STRUCTURE VISUALIZATION -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Chart 1: Status Lifecycle -->
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+                <h3 class="text-xl font-bold text-blue-900 mb-4 border-b pb-2">Vòng Đời Sự Cố (Lifecycle)</h3>
+                <p class="text-sm text-gray-600 mb-4">Mỗi sự cố sẽ trải qua 5 trạng thái xử lý chính. Biểu đồ này giúp bạn hiểu quy trình trạng thái của một ticket.</p>
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Severity Levels -->
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+                <h3 class="text-xl font-bold text-blue-900 mb-4 border-b pb-2">Phân Loại Mức Độ (Severity)</h3>
+                <p class="text-sm text-gray-600 mb-4">Hệ thống phân loại sự cố thành 3 mức độ để ưu tiên nguồn lực xử lý. Màu sắc trên Dashboard tương ứng với các mức độ này.</p>
+                <div class="chart-container">
+                    <canvas id="severityChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: REPORTING WORKFLOW -->
+        <section>
+            <div class="bg-blue-900 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
+                <div class="relative z-10">
+                    <h2 class="text-3xl font-bold mb-6 flex items-center">
+                        <span class="bg-white text-blue-900 w-10 h-10 rounded-full flex items-center justify-center mr-3 text-xl">📝</span>
+                        Quy Trình Báo Cáo Sự Cố
+                    </h2>
+                    <p class="text-blue-200 mb-8 max-w-3xl">Dành cho tất cả người dùng. Quy trình 5 bước đơn giản để ghi nhận sự cố vào hệ thống một cách đầy đủ và chính xác.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <!-- Step 1 -->
+                        <div class="step-card bg-blue-800 bg-opacity-50 p-4 rounded-lg border border-blue-700 text-center">
+                            <div class="text-4xl font-bold text-blue-300 mb-2">01</div>
+                            <h4 class="font-bold text-lg mb-1">Khởi Tạo</h4>
+                            <p class="text-xs text-blue-200">Nhấn nút "Báo cáo mới" trên Dashboard.</p>
+                        </div>
+                        <!-- Step 2 -->
+                        <div class="step-card bg-blue-800 bg-opacity-50 p-4 rounded-lg border border-blue-700 text-center">
+                            <div class="text-4xl font-bold text-blue-300 mb-2">02</div>
+                            <h4 class="font-bold text-lg mb-1">Định Danh</h4>
+                            <p class="text-xs text-blue-200">Nhập Tiêu đề, chọn Dự án & Khu vực xảy ra lỗi.</p>
+                        </div>
+                        <!-- Step 3 -->
+                        <div class="step-card bg-blue-800 bg-opacity-50 p-4 rounded-lg border border-blue-700 text-center">
+                            <div class="text-4xl font-bold text-blue-300 mb-2">03</div>
+                            <h4 class="font-bold text-lg mb-1">Chi Tiết</h4>
+                            <p class="text-xs text-blue-200">Chọn Loại lỗi, Mức độ nghiêm trọng và Mô tả.</p>
+                        </div>
+                        <!-- Step 4 -->
+                        <div class="step-card bg-blue-800 bg-opacity-50 p-4 rounded-lg border border-blue-700 text-center">
+                            <div class="text-4xl font-bold text-blue-300 mb-2">04</div>
+                            <h4 class="font-bold text-lg mb-1">Hình Ảnh</h4>
+                            <p class="text-xs text-blue-200">Chụp hoặc Tải ảnh hiện trường (Tự động nén).</p>
+                        </div>
+                        <!-- Step 5 -->
+                        <div class="step-card bg-blue-800 bg-opacity-50 p-4 rounded-lg border border-blue-700 text-center">
+                            <div class="text-4xl font-bold text-blue-300 mb-2">05</div>
+                            <h4 class="font-bold text-lg mb-1">Hoàn Tất</h4>
+                            <p class="text-xs text-blue-200">Nhấn "Gửi Báo Cáo" để đưa lên hệ thống.</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Decorative Circle -->
+                <div class="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-blue-500 rounded-full opacity-20"></div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: HANDLING WORKFLOW -->
+        <section>
+            <div class="mb-6">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">4. Quy Trình Xử Lý (Kỹ Thuật)</h2>
+                <p class="text-gray-600">Các bước tiêu chuẩn để một Kỹ thuật viên tiếp nhận và giải quyết triệt để sự cố.</p>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Step 1 -->
+                <div class="flex items-center bg-white p-4 rounded-lg shadow border-l-4 border-yellow-500">
+                    <div class="font-bold text-2xl text-yellow-500 w-12 text-center">1</div>
+                    <div class="flex-1 ml-4">
+                        <h4 class="font-bold text-gray-800">Tiếp Nhận (Assign)</h4>
+                        <p class="text-sm text-gray-600">Tìm sự cố trên Dashboard. Nhấn nút <strong>"Tôi nhận việc này"</strong> hoặc được Quản lý gán.</p>
+                    </div>
+                </div>
+                <!-- Step 2 -->
+                <div class="flex items-center bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
+                    <div class="font-bold text-2xl text-blue-500 w-12 text-center">2</div>
+                    <div class="flex-1 ml-4">
+                        <h4 class="font-bold text-gray-800">Cập Nhật Tiến Độ (In Progress)</h4>
+                        <p class="text-sm text-gray-600">Chuyển trạng thái sang <strong>"Đang xử lý"</strong>. Nhập Đánh giá sơ bộ và Thời gian dự kiến (ETA).</p>
+                    </div>
+                </div>
+                <!-- Step 3 -->
+                <div class="flex items-center bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
+                    <div class="font-bold text-2xl text-green-500 w-12 text-center">3</div>
+                    <div class="flex-1 ml-4">
+                        <h4 class="font-bold text-gray-800">Hoàn Thành & Nghiệm Thu (Done)</h4>
+                        <p class="text-sm text-gray-600">Nhập nguyên nhân, cách xử lý. <strong>Chụp ảnh kết quả (Sau)</strong>. Chuyển trạng thái sang <strong>"Hoàn thành"</strong>.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: PERMISSIONS MATRIX -->
+        <section>
+            <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">5. Ma Trận Phân Quyền</h2>
+            <div class="overflow-x-auto bg-white rounded-xl shadow-lg">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-700 text-sm uppercase tracking-wider">
+                            <th class="p-4 font-bold border-b">Hành Động / Vai Trò</th>
+                            <th class="p-4 font-bold border-b text-center text-red-600">Quản Lý (Manager)</th>
+                            <th class="p-4 font-bold border-b text-center text-blue-600">Người Tạo (Creator)</th>
+                            <th class="p-4 font-bold border-b text-center text-green-600">Kỹ Thuật (Assignee)</th>
+                            <th class="p-4 font-bold border-b text-center text-gray-500">Người Xem (Viewer)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-600 text-sm">
+                        <tr class="hover:bg-blue-50 transition">
+                            <td class="p-4 border-b font-medium">Tạo sự cố mới</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                        </tr>
+                        <tr class="hover:bg-blue-50 transition">
+                            <td class="p-4 border-b font-medium">Xem danh sách</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                        </tr>
+                        <tr class="hover:bg-blue-50 transition">
+                            <td class="p-4 border-b font-medium">Chỉnh sửa thông tin</td>
+                            <td class="p-4 border-b text-center">✅ (Tất cả)</td>
+                            <td class="p-4 border-b text-center">✅ (Của mình)</td>
+                            <td class="p-4 border-b text-center">✅ (Việc được giao)</td>
+                            <td class="p-4 border-b text-center">🚫 (Read-only)</td>
+                        </tr>
+                        <tr class="hover:bg-blue-50 transition">
+                            <td class="p-4 border-b font-medium">Đổi trạng thái</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                            <td class="p-4 border-b text-center">✅</td>
+                            <td class="p-4 border-b text-center">🚫</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-xs text-gray-500 mt-2 italic text-center">* Chế độ "Read-only" (Chỉ xem) sẽ hiển thị biểu tượng cái khiên 🛡️ trên giao diện.</p>
+        </section>
+
+        <!-- FAQ Section -->
+        <section class="bg-indigo-50 rounded-2xl p-8 border border-indigo-100">
+            <h2 class="text-2xl font-bold text-indigo-900 mb-6 flex items-center">
+                <span class="mr-2">❓</span> Các Câu Hỏi Thường Gặp
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="font-bold text-indigo-800 mb-1">Tại sao tôi không thấy nút "Cập nhật"?</h4>
+                    <p class="text-sm text-indigo-700">Có thể bạn đang ở chế độ "Chỉ xem". Hãy kiểm tra xem bạn có phải là người tạo hoặc người được giao việc xử lý sự cố đó không.</p>
+                </div>
+                <div>
+                    <h4 class="font-bold text-indigo-800 mb-1">Tôi có thể tải bao nhiêu ảnh?</h4>
+                    <p class="text-sm text-indigo-700">Hệ thống cho phép tối đa 3 ảnh cho phần hiện trường (Trước) và 3 ảnh cho kết quả (Sau). Ảnh sẽ được tự động nén để tối ưu.</p>
+                </div>
+                <div>
+                    <h4 class="font-bold text-indigo-800 mb-1">Làm sao để đổi mật khẩu?</h4>
+                    <p class="text-sm text-indigo-700">Nhấn vào biểu tượng chìa khóa 🔑 trên thanh Header. Bạn cần nhập chính xác mật khẩu hiện tại để đổi mới.</p>
+                </div>
+                <div>
+                    <h4 class="font-bold text-indigo-800 mb-1">Bộ lọc hoạt động thế nào?</h4>
+                    <p class="text-sm text-indigo-700">Sử dụng thanh điều hướng trên Dashboard để lọc sự cố theo Dự án hoặc Trạng thái (VD: Chỉ xem các lỗi chưa hoàn thành).</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-gray-800 text-gray-400 py-8 text-center">
+        <p class="text-sm">&copy; 2025 Incident Tracker System. Internal Documentation.</p>
+    </footer>
+
+    <!-- Scripts for Charts -->
+    <script>
+        // --- HELPER FUNCTION FOR LABEL WRAPPING (16 CHARS) ---
+        function formatLabel(str, maxwidth) {
+            const sections = [];
+            const words = str.split(" ");
+            let temp = "";
+            words.forEach(function(item, index) {
+                if (temp.length > 0) {
+                    const concat = temp + ' ' + item;
+                    if (concat.length > maxwidth) {
+                        sections.push(temp);
+                        temp = "";
+                    } else {
+                        if (index === (words.length - 1)) {
+                            sections.push(concat);
+                            return;
+                        } else {
+                            temp = concat;
+                            return;
+                        }
+                    }
+                }
+                if (index === (words.length - 1)) {
+                    sections.push(item);
+                    return;
+                }
+                if (item.length < maxwidth) {
+                    temp = item;
+                } else {
+                    sections.push(item);
+                }
+            });
+            return sections;
+        }
+
+        // --- CHART CONFIGURATION ---
+        // 1. Status Lifecycle (Doughnut)
+        const ctxStatus = document.getElementById('statusChart').getContext('2d');
+        new Chart(ctxStatus, {
+            type: 'doughnut',
+            data: {
+                labels: ['Mới (New)', 'Đang xử lý (In Progress)', 'Hoàn thành (Done)', 'Theo dõi (Monitor)', 'Chưa xong (Incomplete)'],
+                datasets: [{
+                    label: 'Trạng thái',
+                    data: [20, 30, 40, 5, 5], // Mock proportions representing flow
+                    backgroundColor: [
+                        '#F3F4F6', // New (Gray)
+                        '#3B82F6', // In Progress (Blue)
+                        '#10B981', // Done (Green)
+                        '#8B5CF6', // Monitor (Purple)
+                        '#EF4444'  // Incomplete (Red)
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right' },
+                    tooltip: {
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                const item = tooltipItems[0];
+                                let label = item.chart.data.labels[item.dataIndex];
+                                if (Array.isArray(label)) return label.join(' ');
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // 2. Severity Levels (Bar)
+        const ctxSeverity = document.getElementById('severityChart').getContext('2d');
+        const severityLabels = ['Nghiêm trọng (Critical)', 'Quan trọng (Major)', 'Cần quan tâm (Minor)'];
+        const wrappedSeverityLabels = severityLabels.map(l => formatLabel(l, 16));
+
+        new Chart(ctxSeverity, {
+            type: 'bar',
+            data: {
+                labels: wrappedSeverityLabels,
+                datasets: [{
+                    label: 'Độ ưu tiên xử lý',
+                    data: [80, 50, 30], // Mock visual weight
+                    backgroundColor: [
+                        '#EF4444', // Red for Critical
+                        '#F97316', // Orange for Major
+                        '#3B82F6'  // Blue for Minor
+                    ],
+                    borderRadius: 8,
+                    barThickness: 40
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, display: false },
+                    x: { grid: { display: false } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                const item = tooltipItems[0];
+                                let label = item.chart.data.labels[item.dataIndex];
+                                if (Array.isArray(label)) return label.join(' ');
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
