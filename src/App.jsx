@@ -31,8 +31,7 @@ import {
   Lock, LogOut, UserCheck, Mail, RefreshCw, Copy, Layers,
   Aperture, Upload, Eye, PieChart, TrendingUp, AlertOctagon,
   Timer, Shield, ShieldAlert, Key, Settings, UserCog, Edit3,
-  Send, History, MessageCircle,
-  HelpCircle
+  Send, History, MessageCircle, HelpCircle, BookOpen // Thêm BookOpen
 } from 'lucide-react';
 
 // ==========================================
@@ -478,6 +477,8 @@ function IncidentTrackerContent() {
   // --- MODAL STATES ---
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showManualModal, setShowManualModal] = useState(false); // New: Manual Modal
+  
   const [profileFormData, setProfileFormData] = useState({});
   const [passwordFormData, setPasswordFormData] = useState({ current: '', new: '', confirm: '' });
   const [actionLoading, setActionLoading] = useState(false);
@@ -923,6 +924,121 @@ function IncidentTrackerContent() {
     </div>
   );
 
+  const renderUserManualModal = () => (
+    <div className="fixed inset-0 z-50 bg-black/50 flex flex-col items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowManualModal(false)}>
+        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b bg-blue-600 text-white flex justify-between items-center">
+                <h3 className="font-bold text-lg flex items-center">
+                    <BookOpen className="mr-2"/> Hướng Dẫn Sử Dụng
+                </h3>
+                <button onClick={() => setShowManualModal(false)} className="p-1 hover:bg-blue-500 rounded-full transition">
+                    <X size={20} className="text-white" />
+                </button>
+            </div>
+            
+            <div className="flex-grow overflow-y-auto p-6 bg-gray-50 text-gray-800">
+                <section className="mb-8">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">1. Hệ Thống Tài Khoản</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-red-200 border-t-4 border-t-red-500">
+                            <h3 className="font-bold text-red-600">Quản Lý (Admin)</h3>
+                            <p className="text-xs text-gray-500 mt-1">Toàn quyền hệ thống. Chỉnh sửa mọi ticket, quản lý user.</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-blue-200 border-t-4 border-t-blue-500">
+                            <h3 className="font-bold text-blue-600">Kỹ Thuật (Tech)</h3>
+                            <p className="text-xs text-gray-500 mt-1">Xử lý sự cố. Nhận việc, cập nhật tiến độ, hoàn thành.</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-green-200 border-t-4 border-t-green-500">
+                            <h3 className="font-bold text-green-600">Nhân Viên (User)</h3>
+                            <p className="text-xs text-gray-500 mt-1">Chỉ báo cáo sự cố và theo dõi trạng thái.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section className="mb-8">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">2. Quy Trình Báo Cáo</h2>
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <div className="flex-1 bg-white p-4 rounded-lg border border-gray-200 relative">
+                            <div className="absolute -top-3 -left-3 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">1</div>
+                            <h4 className="font-bold mt-2">Tạo Mới</h4>
+                            <p className="text-sm text-gray-600">Nhấn nút "Báo cáo mới" trên Dashboard.</p>
+                        </div>
+                        <div className="flex-1 bg-white p-4 rounded-lg border border-gray-200 relative">
+                            <div className="absolute -top-3 -left-3 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">2</div>
+                            <h4 className="font-bold mt-2">Nhập Liệu</h4>
+                            <p className="text-sm text-gray-600">Điền Tiêu đề, Dự án, Khu vực và Mô tả.</p>
+                        </div>
+                        <div className="flex-1 bg-white p-4 rounded-lg border border-gray-200 relative">
+                            <div className="absolute -top-3 -left-3 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">3</div>
+                            <h4 className="font-bold mt-2">Hình Ảnh</h4>
+                            <p className="text-sm text-gray-600">Chụp/Tải ảnh hiện trường (Tự động nén).</p>
+                        </div>
+                        <div className="flex-1 bg-white p-4 rounded-lg border border-gray-200 relative">
+                            <div className="absolute -top-3 -left-3 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">4</div>
+                            <h4 className="font-bold mt-2">Gửi</h4>
+                            <p className="text-sm text-gray-600">Nhấn "Gửi Báo Cáo" để hoàn tất.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section className="mb-8">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">3. Quyền Hạn Chỉnh Sửa</h2>
+                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-100 text-gray-700">
+                                <tr>
+                                    <th className="p-3">Vai trò</th>
+                                    <th className="p-3">Quyền hạn</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="border-b">
+                                    <td className="p-3 font-medium">Người Tạo</td>
+                                    <td className="p-3">Được chỉnh sửa ticket do chính mình tạo.</td>
+                                </tr>
+                                <tr className="border-b">
+                                    <td className="p-3 font-medium">Kỹ Thuật Viên</td>
+                                    <td className="p-3">Được chỉnh sửa ticket được giao (Assignee).</td>
+                                </tr>
+                                <tr className="border-b">
+                                    <td className="p-3 font-medium">Quản Lý</td>
+                                    <td className="p-3">Toàn quyền chỉnh sửa tất cả ticket.</td>
+                                </tr>
+                                <tr>
+                                    <td className="p-3 font-medium text-gray-400">Người Khác</td>
+                                    <td className="p-3 text-gray-400">Chỉ xem (Read-only mode).</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">FAQ - Câu Hỏi Thường Gặp</h2>
+                    <ul className="space-y-3">
+                        <li className="bg-blue-50 p-3 rounded-lg">
+                            <span className="font-bold text-blue-800">Q: Tại sao tôi không thấy nút Cập nhật?</span>
+                            <br/>
+                            <span className="text-sm text-blue-700">A: Bạn đang ở chế độ Chỉ xem (Read-only). Hãy kiểm tra xem bạn có phải là người tạo hoặc người xử lý ticket đó không.</span>
+                        </li>
+                        <li className="bg-blue-50 p-3 rounded-lg">
+                            <span className="font-bold text-blue-800">Q: Làm sao để đổi mật khẩu?</span>
+                            <br/>
+                            <span className="text-sm text-blue-700">A: Nhấn vào biểu tượng chìa khóa 🔑 trên thanh Header.</span>
+                        </li>
+                    </ul>
+                </section>
+            </div>
+            
+            <div className="p-4 border-t bg-gray-50 text-right">
+                <button onClick={() => setShowManualModal(false)} className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition">
+                    Đóng
+                </button>
+            </div>
+        </div>
+    </div>
+  );
+
   const renderProfileModal = () => (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => !actionLoading && setShowProfileModal(false)}>
         <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
@@ -1116,7 +1232,7 @@ function IncidentTrackerContent() {
                     <Lock className="text-blue-600 w-8 h-8" />
                 </div>
                 <h1 className="text-2xl font-bold text-gray-800">Incident Tracker</h1>
-                {/* <p className="text-gray-500 text-sm mt-1">Đăng nhập với Firebase Auth</p> */}
+                <p className="text-gray-500 text-sm mt-1">Đăng nhập với Firebase Auth</p>
             </div>
             {loginError && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm flex items-center"><AlertTriangle size={16} className="mr-2"/> {loginError}</div>}
             <div className="space-y-4">
@@ -1181,14 +1297,12 @@ function IncidentTrackerContent() {
                 <p className="text-blue-100 text-sm mt-1">{appUser?.title} • {appUser?.email}</p>
             </div>
             <div className="flex items-center mt-4 md:mt-0 gap-3">
-                 <a 
-                    href="/src/UserManual.html" 
-                    target="_blank"
-                    rel="noreferrer" 
+                 <button 
+                    onClick={() => setShowManualModal(true)} 
                     className="bg-blue-500 hover:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition"
                  >
                     <HelpCircle size={16} className="mr-2"/> Hướng dẫn
-                 </a>
+                 </button>
 
                  <button onClick={() => setView('stats')} className="bg-blue-500 hover:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition">
                     <BarChart2 size={16} className="mr-2"/> Thống kê
@@ -1321,157 +1435,6 @@ function IncidentTrackerContent() {
          </div>
         }
       </div>
-    </div>
-  );
-
-  const renderStats = () => (
-    <div className="pb-20 max-w-7xl mx-auto w-full bg-gray-50 min-h-screen">
-        <div className="bg-white border-b sticky top-0 z-20 shadow-sm mb-6">
-            <div className="px-4 py-4 flex items-center justify-between">
-                <button onClick={() => setView('list')} className="flex items-center text-gray-600 hover:text-blue-600 transition">
-                    <ChevronLeft className="mr-1" />
-                    <span className="font-medium">Quay lại Dashboard</span>
-                </button>
-                <h2 className="font-bold text-lg text-gray-800">Thống Kê</h2>
-                <div className="w-20"></div>
-            </div>
-        </div>
-        
-        <div className="px-4 md:px-6 space-y-6">
-            
-            {/* 1. Overview Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center">
-                    <div className="p-3 bg-blue-100 text-blue-600 rounded-full mr-4">
-                        <Database size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-medium">Tổng sự cố</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{stats.total}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center">
-                    <div className="p-3 bg-red-100 text-red-600 rounded-full mr-4">
-                        <AlertOctagon size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-medium">Nghiêm trọng</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{stats.critical}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center">
-                    <div className="p-3 bg-green-100 text-green-600 rounded-full mr-4">
-                        <TrendingUp size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-medium">Tỷ lệ hoàn thành</p>
-                        <h3 className="text-2xl font-bold text-gray-900">
-                            {stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0}%
-                        </h3>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* 2. Theo Dự Án */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                        <Layers className="mr-2 text-indigo-500" /> Theo Dự Án
-                    </h3>
-                    <div className="space-y-4">
-                        {Object.entries(stats.byProject).map(([proj, count]) => (
-                            <div key={proj}>
-                                <div className="flex justify-between text-sm mb-1">
-                                    <span className="font-medium text-gray-700 truncate pr-2">{proj}</span>
-                                    <span className="font-bold">{count}</span>
-                                </div>
-                                <div className="w-full bg-gray-100 rounded-full h-2">
-                                    <div 
-                                        className="h-2 rounded-full bg-indigo-500"
-                                        style={{ width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%` }}
-                                    ></div>
-                                </div>
-                            </div>
-                        ))}
-                         {Object.keys(stats.byProject).length === 0 && <p className="text-sm text-gray-400 italic text-center py-4">Chưa có dữ liệu</p>}
-                    </div>
-                </div>
-
-                {/* 3. Theo Loại Sự Cố */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                        <PieChart className="mr-2 text-teal-500" /> Theo Loại Sự Cố
-                    </h3>
-                    <div className="space-y-4">
-                        {Object.entries(stats.byType).map(([type, count]) => (
-                            <div key={type}>
-                                <div className="flex justify-between text-sm mb-1">
-                                    <span className="font-medium text-gray-700">{type}</span>
-                                    <span className="font-bold">{count}</span>
-                                </div>
-                                <div className="w-full bg-gray-100 rounded-full h-2">
-                                    <div 
-                                        className="h-2 rounded-full bg-teal-500"
-                                        style={{ width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%` }}
-                                    ></div>
-                                </div>
-                            </div>
-                        ))}
-                         {Object.keys(stats.byType).length === 0 && <p className="text-sm text-gray-400 italic text-center py-4">Chưa có dữ liệu</p>}
-                    </div>
-                </div>
-                
-                 {/* 4. Theo Mức Độ */}
-                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                        <AlertTriangle className="mr-2 text-orange-500" /> Theo Mức Độ
-                    </h3>
-                    <div className="flex gap-4 items-end justify-around h-40 pb-4">
-                        {Object.entries(stats.bySeverity).map(([sev, count]) => {
-                             const config = SEVERITY[sev];
-                             const height = stats.total > 0 ? (count / stats.total) * 100 : 0;
-                             // Min height 10% for visual
-                             const visualHeight = count > 0 ? Math.max(height, 10) : 0; 
-                             
-                             return (
-                                <div key={sev} className="flex flex-col items-center justify-end h-full w-1/3 group">
-                                    <div className="text-xs font-bold mb-1 text-gray-600">{count}</div>
-                                    <div 
-                                        className={`w-full max-w-[40px] rounded-t-lg transition-all duration-500 ${config ? config.color.split(' ')[0] : 'bg-gray-200'}`}
-                                        style={{ height: `${visualHeight}%` }}
-                                    ></div>
-                                    <div className="text-xs text-gray-500 mt-2 font-medium">{config ? config.label : sev}</div>
-                                </div>
-                             )
-                        })}
-                    </div>
-                </div>
-
-                {/* 5. Theo Tần Suất (Original Logic) */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                        <Activity className="mr-2 text-red-500" /> Tần Suất Lặp Lại
-                    </h3>
-                    <div className="space-y-4">
-                        {Object.entries(stats.byFrequency).map(([key, count]) => (
-                            <div key={key}>
-                                <div className="flex justify-between text-sm mb-1">
-                                    <span className="font-medium text-gray-700">{FREQUENCIES[key].label}</span>
-                                    <span className="font-bold">{count}</span>
-                                </div>
-                                <div className="w-full bg-gray-100 rounded-full h-2.5">
-                                    <div 
-                                        className={`h-2.5 rounded-full ${key === 'DAILY' ? 'bg-red-500' : key === 'WEEKLY' ? 'bg-orange-500' : 'bg-yellow-500'}`} 
-                                        style={{ width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%` }}
-                                    ></div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
   );
 
@@ -1865,6 +1828,7 @@ function IncidentTrackerContent() {
       {showCamera && renderCameraModal()}
       {showProfileModal && renderProfileModal()}
       {showPasswordModal && renderPasswordModal()}
+      {showManualModal && renderUserManualModal()}
       {previewData && renderImagePreviewModal()}
       {view === 'list' && renderDashboard()}
       {view === 'create' && renderForm(false)}
