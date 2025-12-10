@@ -26,7 +26,8 @@ import {
   Save, X, LayoutGrid, List, Database, MapPin, 
   Repeat, BarChart2, Phone, Calendar, MessageSquare,
   Lock, LogOut, UserCheck, Mail, RefreshCw, Copy, Layers,
-  Aperture, Upload, Eye, PieChart, TrendingUp, AlertOctagon
+  Aperture, Upload, Eye, PieChart, TrendingUp, AlertOctagon,
+  Timer, Shield, ShieldAlert
 } from 'lucide-react';
 
 // ==========================================
@@ -220,7 +221,7 @@ const MOCK_DATA = [
 ];
 
 // ==========================================
-// 5. HELPER FUNCTIONS (COMPRESSION)
+// 5. HELPER FUNCTIONS
 // ==========================================
 
 const compressImage = (file, maxWidth = 800, quality = 0.6) => {
@@ -258,6 +259,26 @@ const compressImage = (file, maxWidth = 800, quality = 0.6) => {
   });
 };
 
+const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+};
+
+const getCurrentLocalTime = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
+
 // ==========================================
 // 6. ERROR BOUNDARY & UI COMPONENTS
 // ==========================================
@@ -293,7 +314,7 @@ const Badge = ({ children, className }) => (
   </span>
 );
 
-const InputField = ({ label, value, onChange, type = "text", required = false, placeholder = "", icon: Icon, action, onKeyDown }) => (
+const InputField = ({ label, value, onChange, type = "text", required = false, placeholder = "", icon: Icon, action, onKeyDown, disabled = false }) => (
   <div className="mb-4">
     <div className="flex justify-between items-center mb-1">
         <label className="block text-sm font-medium text-gray-700">{label} {required && <span className="text-red-500">*</span>}</label>
@@ -303,20 +324,22 @@ const InputField = ({ label, value, onChange, type = "text", required = false, p
         {Icon && <div className="absolute left-3 top-3.5 text-gray-400"><Icon size={18} /></div>}
         {type === 'textarea' ? (
         <textarea 
-            className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition ${Icon ? 'pl-10' : ''}`}
+            className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition ${Icon ? 'pl-10' : ''} ${disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
             rows="3"
             value={value}
-            onChange={e => onChange(e.target.value)}
+            onChange={e => !disabled && onChange(e.target.value)}
             placeholder={placeholder}
+            disabled={disabled}
         />
         ) : (
         <input 
             type={type}
-            className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition ${Icon ? 'pl-10' : ''}`}
+            className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition ${Icon ? 'pl-10' : ''} ${disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
             value={value}
-            onChange={e => onChange(e.target.value)}
+            onChange={e => !disabled && onChange(e.target.value)}
             onKeyDown={onKeyDown} 
             placeholder={placeholder}
+            disabled={disabled}
         />
         )}
     </div>
@@ -327,9 +350,9 @@ const SelectField = ({ label, value, onChange, options, required = false, disabl
   <div className="mb-4">
     <label className="block text-sm font-medium text-gray-700 mb-1">{label} {required && <span className="text-red-500">*</span>}</label>
     <select 
-      className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white outline-none ${disabled ? 'bg-gray-100 text-gray-400' : ''}`}
+      className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white outline-none ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
       value={value}
-      onChange={e => onChange(e.target.value)}
+      onChange={e => !disabled && onChange(e.target.value)}
       disabled={disabled}
     >
       <option value="">-- Chọn --</option>
@@ -449,8 +472,15 @@ function IncidentTrackerContent() {
       alert("Vui lòng nhập tên sự cố, dự án và khu vực");
       return;
     }
+    
+    // Auto-fill incidentTime if missing
+    const submissionData = {
+        ...formData,
+        incidentTime: formData.incidentTime || getCurrentLocalTime()
+    };
+
     try {
-      await IncidentService.create(formData, appUser);
+      await IncidentService.create(submissionData, appUser);
       setView('list');
       setFormData({});
     } catch (e) {
@@ -494,6 +524,8 @@ function IncidentTrackerContent() {
         rootCause: '',
         preliminaryAssessment: '',
         estimatedTime: '',
+        processingTime: '', // Reset processing time
+        incidentTime: getCurrentLocalTime(), // Reset to now
         imagesAfter: [], 
         incompleteReason: '',
         reporter: appUser?.name,
@@ -776,7 +808,7 @@ function IncidentTrackerContent() {
                     <Lock className="text-blue-600 w-8 h-8" />
                 </div>
                 <h1 className="text-2xl font-bold text-gray-800">Incident Tracker</h1>
-                <p className="text-gray-500 text-sm mt-1">Đăng nhập với Firebase Auth</p>
+                {/* <p className="text-gray-500 text-sm mt-1">Đăng nhập với Firebase Auth</p> */}
             </div>
             {loginError && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm flex items-center"><AlertTriangle size={16} className="mr-2"/> {loginError}</div>}
             <div className="space-y-4">
@@ -805,7 +837,7 @@ function IncidentTrackerContent() {
                     {isLoggingIn ? <Activity className="animate-spin" /> : 'Đăng Nhập'}
                 </button>
             </div>
-            <div className="mt-8 pt-6 border-t border-gray-100">
+            {/* <div className="mt-8 pt-6 border-t border-gray-100">
                 <p className="text-xs text-center text-gray-400 mb-4 uppercase font-bold">Tài khoản demo (Pass: 123456)</p>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="bg-gray-50 p-2 rounded cursor-pointer hover:bg-blue-50" onClick={() => {setLoginEmail('admin@demo.com'); setLoginPassword('123456')}}>
@@ -822,7 +854,7 @@ function IncidentTrackerContent() {
                     </div>
                 </div>
                 <p className="text-[10px] text-center text-gray-400 mt-2 italic">*Lưu ý: Bạn cần tạo Authentication Users trên Firebase Console khớp với các email này để đăng nhập thành công.</p>
-            </div>
+            </div> */}
         </div>
     </div>
   );
@@ -873,6 +905,7 @@ function IncidentTrackerContent() {
                             priority: 'HIGH_2H', 
                             type: 'Phần cứng', 
                             frequency: 'NONE',
+                            incidentTime: getCurrentLocalTime(),
                             reporter: appUser?.name, 
                             reporterPhone: appUser?.phone 
                         }); 
@@ -918,12 +951,21 @@ function IncidentTrackerContent() {
                         </span>
                      </div>
                      <p className="text-sm text-gray-500 line-clamp-2">{inc.description}</p>
-                     {inc.estimatedTime && (STATUS[inc.status] === STATUS.IN_PROGRESS || STATUS[inc.status] === STATUS.NEW) && (
-                        <div className="bg-orange-50 border border-orange-100 p-2 rounded flex items-start gap-2 text-xs text-orange-800">
-                           <Clock size={14} className="mt-0.5 flex-shrink-0" />
-                           <span>Dự kiến: <strong>{inc.estimatedTime}</strong></span>
-                        </div>
-                     )}
+                     
+                     <div className="flex items-center gap-2 mt-2">
+                        {inc.incidentTime && (
+                            <div className="text-xs text-gray-500 flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                <Calendar size={12} className="mr-1" /> 
+                                {formatDateTime(inc.incidentTime)}
+                            </div>
+                        )}
+                        {inc.estimatedTime && (STATUS[inc.status] === STATUS.IN_PROGRESS || STATUS[inc.status] === STATUS.NEW) && (
+                            <div className="bg-orange-50 border border-orange-100 px-2 py-1 rounded flex items-center gap-1 text-xs text-orange-800">
+                               <Timer size={12} className="flex-shrink-0" />
+                               <span>ETA: <strong>{inc.estimatedTime}</strong></span>
+                            </div>
+                        )}
+                     </div>
                 </div>
                 <div className="flex items-center justify-between border-t pt-4 border-gray-100 mt-auto">
                     <div className="flex items-center text-xs text-gray-500">
@@ -1104,7 +1146,28 @@ function IncidentTrackerContent() {
     </div>
   );
 
-  const renderForm = (isEdit = false) => (
+  const renderForm = (isEdit = false) => {
+    // --- PHÂN QUYỀN (ACCESS CONTROL) ---
+    // Mặc định là có thể sửa (nếu là tạo mới)
+    let canEdit = !isEdit; 
+
+    // Nếu đang Edit, kiểm tra quyền
+    if (isEdit && selectedIncident && appUser) {
+        const isManager = appUser.role === 'MANAGER';
+        const isCreator = selectedIncident.createdBy === appUser.uid;
+        // Kiểm tra assignee bằng tên (vì cấu trúc dữ liệu hiện tại lưu tên)
+        const isAssignee = selectedIncident.assignee === appUser.name; 
+        
+        if (isManager || isCreator || isAssignee) {
+            canEdit = true;
+        } else {
+            canEdit = false;
+        }
+    }
+
+    const isReadOnly = !canEdit;
+
+    return (
     <div className="min-h-screen bg-gray-50 pb-10">
       {/* Hidden File Input for Upload Handling */}
       <input 
@@ -1122,12 +1185,32 @@ function IncidentTrackerContent() {
                 <ChevronLeft className="mr-1" />
                 <span className="font-medium">Quay lại</span>
             </button>
-            <h2 className="font-bold text-lg text-gray-800">{isEdit ? 'Chi Tiết & Xử Lý' : 'Tạo Sự Cố Mới'}</h2>
+            <div className="flex items-center gap-3">
+                 <h2 className="font-bold text-lg text-gray-800">{isEdit ? 'Chi Tiết & Xử Lý' : 'Tạo Sự Cố Mới'}</h2>
+                 {isReadOnly && (
+                     <span className="flex items-center text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200 font-medium">
+                         <Shield size={12} className="mr-1"/> Chỉ xem
+                     </span>
+                 )}
+            </div>
+            
             <div className="w-20 text-right">
                 {isEdit && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">ID: {selectedIncident?.id?.slice(0,4)}</span>}
             </div>
          </div>
       </div>
+      
+      {/* Thông báo quyền hạn nếu bị khóa */}
+      {isReadOnly && (
+          <div className="max-w-4xl mx-auto px-4 mt-4">
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-lg flex items-start text-sm">
+                  <ShieldAlert size={16} className="mt-0.5 mr-2 flex-shrink-0" />
+                  <span>
+                      <strong>Chế độ chỉ xem:</strong> Bạn không có quyền chỉnh sửa sự cố này. Chỉ người tạo, người được phân công hoặc quản lý mới có thể cập nhật.
+                  </span>
+              </div>
+          </div>
+      )}
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1137,7 +1220,18 @@ function IncidentTrackerContent() {
                         <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 text-xs">1</span>
                         Thông tin sự cố
                     </h3>
-                    <InputField label="Tiêu đề sự cố" value={formData.title || ''} onChange={v => setFormData({...formData, title: v})} required placeholder="VD: Mất kết nối máy chủ tầng 3"/>
+                    <InputField label="Tiêu đề sự cố" value={formData.title || ''} onChange={v => setFormData({...formData, title: v})} required placeholder="VD: Mất kết nối máy chủ tầng 3" disabled={isReadOnly}/>
+                    
+                    {/* Thêm trường thời gian xảy ra */}
+                    <InputField 
+                        label="Thời gian xảy ra/báo cáo" 
+                        type="datetime-local"
+                        value={formData.incidentTime || ''} 
+                        onChange={v => setFormData({...formData, incidentTime: v})} 
+                        required 
+                        disabled={isReadOnly}
+                    />
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <SelectField 
                             label="Dự án" 
@@ -1145,6 +1239,7 @@ function IncidentTrackerContent() {
                             onChange={v => setFormData({...formData, project: v, area: ''})} 
                             options={Object.keys(projectsConfig)} 
                             required 
+                            disabled={isReadOnly}
                         />
                         <SelectField 
                             label="Khu vực" 
@@ -1152,18 +1247,18 @@ function IncidentTrackerContent() {
                             onChange={v => setFormData({...formData, area: v})} 
                             options={formData.project ? projectsConfig[formData.project] || [] : []} 
                             required 
-                            disabled={!formData.project} 
+                            disabled={!formData.project || isReadOnly} 
                         />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SelectField label="Loại sự cố" value={formData.type || ''} onChange={v => setFormData({...formData, type: v})} options={TYPES} />
-                        <SelectField label="Tần suất lặp lại" value={formData.frequency || 'NONE'} onChange={v => setFormData({...formData, frequency: v})} options={Object.keys(FREQUENCIES).map(k => ({ value: k, label: FREQUENCIES[k].label }))} />
+                        <SelectField label="Loại sự cố" value={formData.type || ''} onChange={v => setFormData({...formData, type: v})} options={TYPES} disabled={isReadOnly} />
+                        <SelectField label="Tần suất lặp lại" value={formData.frequency || 'NONE'} onChange={v => setFormData({...formData, frequency: v})} options={Object.keys(FREQUENCIES).map(k => ({ value: k, label: FREQUENCIES[k].label }))} disabled={isReadOnly} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SelectField label="Mức độ" value={formData.severity || ''} onChange={v => setFormData({...formData, severity: v})} options={Object.keys(SEVERITY).map(k => ({ value: k, label: SEVERITY[k].label }))} />
-                        <SelectField label="Độ ưu tiên" value={formData.priority || ''} onChange={v => setFormData({...formData, priority: v})} options={Object.keys(PRIORITY).map(k => ({ value: k, label: PRIORITY[k].label }))} />
+                        <SelectField label="Mức độ" value={formData.severity || ''} onChange={v => setFormData({...formData, severity: v})} options={Object.keys(SEVERITY).map(k => ({ value: k, label: SEVERITY[k].label }))} disabled={isReadOnly} />
+                        <SelectField label="Độ ưu tiên" value={formData.priority || ''} onChange={v => setFormData({...formData, priority: v})} options={Object.keys(PRIORITY).map(k => ({ value: k, label: PRIORITY[k].label }))} disabled={isReadOnly} />
                     </div>
-                    <InputField label="Mô tả chi tiết" type="textarea" value={formData.description || ''} onChange={v => setFormData({...formData, description: v})} placeholder="Mô tả hiện tượng, vị trí cụ thể..." />
+                    <InputField label="Mô tả chi tiết" type="textarea" value={formData.description || ''} onChange={v => setFormData({...formData, description: v})} placeholder="Mô tả hiện tượng, vị trí cụ thể..." disabled={isReadOnly} />
                 </div>
                 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -1172,34 +1267,35 @@ function IncidentTrackerContent() {
                         Thông tin liên hệ
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Người báo cáo" value={formData.reporter || ''} onChange={v => setFormData({...formData, reporter: v})} placeholder="Tên người báo" icon={User} />
-                        <InputField label="SĐT Người báo" value={formData.reporterPhone || ''} onChange={v => setFormData({...formData, reporterPhone: v})} placeholder="09xx..." icon={Phone} />
+                        <InputField label="Người báo cáo" value={formData.reporter || ''} onChange={v => setFormData({...formData, reporter: v})} placeholder="Tên người báo" icon={User} disabled={isReadOnly} />
+                        <InputField label="SĐT Người báo" value={formData.reporterPhone || ''} onChange={v => setFormData({...formData, reporterPhone: v})} placeholder="09xx..." icon={Phone} disabled={isReadOnly} />
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
                         <p className="text-xs font-semibold text-gray-500 mb-3 uppercase">Liên hệ hiện trường (Nếu khác người báo)</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <InputField label="Người liên hệ" value={formData.contactPerson || ''} onChange={v => setFormData({...formData, contactPerson: v})} placeholder="Tên người tại chỗ" icon={User} />
-                            <InputField label="SĐT Hiện trường" value={formData.contactPhone || ''} onChange={v => setFormData({...formData, contactPhone: v})} placeholder="09xx..." icon={Phone} />
+                            <InputField label="Người liên hệ" value={formData.contactPerson || ''} onChange={v => setFormData({...formData, contactPerson: v})} placeholder="Tên người tại chỗ" icon={User} disabled={isReadOnly} />
+                            <InputField label="SĐT Hiện trường" value={formData.contactPhone || ''} onChange={v => setFormData({...formData, contactPhone: v})} placeholder="09xx..." icon={Phone} disabled={isReadOnly} />
                         </div>
                     </div>
                 </div>
 
+                {/* Phần Xử Lý - Luôn hiển thị nếu là Edit để xem, nhưng disable nếu ko có quyền */}
                 {isEdit && (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-t-4 border-t-blue-500">
+                <div className={`bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-t-4 ${isReadOnly ? 'border-t-gray-300' : 'border-t-blue-500'}`}>
                     <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center justify-between">
                         <div className="flex items-center">
-                            <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-2 text-xs">3</span>
+                            <span className={`w-6 h-6 rounded-full ${isReadOnly ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-600'} flex items-center justify-center mr-2 text-xs`}>3</span>
                             Đánh giá & Kế hoạch xử lý
                         </div>
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Dành cho kỹ thuật</span>
+                        <span className={`text-xs ${isReadOnly ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'} px-2 py-1 rounded`}>Dành cho kỹ thuật</span>
                     </h3>
                     
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
-                        <h4 className="text-sm font-bold text-blue-800 mb-3 flex items-center"><MessageSquare size={16} className="mr-2"/> Thông tin phản hồi cho khách hàng</h4>
-                        <InputField label="Đánh giá sơ bộ" type="textarea" value={formData.preliminaryAssessment || ''} onChange={v => setFormData({...formData, preliminaryAssessment: v})} placeholder="Nhận định ban đầu về lỗi..." />
+                    <div className={`${isReadOnly ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-100'} p-4 rounded-lg border mb-4`}>
+                        <h4 className={`text-sm font-bold ${isReadOnly ? 'text-gray-600' : 'text-blue-800'} mb-3 flex items-center`}><MessageSquare size={16} className="mr-2"/> Thông tin phản hồi cho khách hàng</h4>
+                        <InputField label="Đánh giá sơ bộ" type="textarea" value={formData.preliminaryAssessment || ''} onChange={v => setFormData({...formData, preliminaryAssessment: v})} placeholder="Nhận định ban đầu về lỗi..." disabled={isReadOnly} />
                          
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <InputField label="Thời gian dự kiến (ETA)" value={formData.estimatedTime || ''} onChange={v => setFormData({...formData, estimatedTime: v})} placeholder="VD: 14h00 hôm nay" icon={Calendar} />
+                             <InputField label="Thời gian dự kiến (ETA)" value={formData.estimatedTime || ''} onChange={v => setFormData({...formData, estimatedTime: v})} placeholder="VD: 14h00 hôm nay" icon={Calendar} disabled={isReadOnly} />
                              
                              <InputField 
                                 label="Kỹ thuật viên phụ trách" 
@@ -1207,8 +1303,9 @@ function IncidentTrackerContent() {
                                 onChange={v => setFormData({...formData, assignee: v})} 
                                 placeholder="Tên kỹ thuật viên" 
                                 icon={User}
+                                disabled={isReadOnly}
                                 action={
-                                    !formData.assignee && (
+                                    !isReadOnly && !formData.assignee && (
                                         <button onClick={() => assignToMe('assignee', 'assigneePhone')} className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 flex items-center">
                                             <UserCheck size={12} className="mr-1"/> Tôi nhận việc này
                                         </button>
@@ -1216,7 +1313,7 @@ function IncidentTrackerContent() {
                                 }
                             />
                          </div>
-                         <InputField label="SĐT Kỹ thuật viên" value={formData.assigneePhone || ''} onChange={v => setFormData({...formData, assigneePhone: v})} placeholder="Số điện thoại liên hệ kỹ thuật" icon={Phone} />
+                         <InputField label="SĐT Kỹ thuật viên" value={formData.assigneePhone || ''} onChange={v => setFormData({...formData, assigneePhone: v})} placeholder="Số điện thoại liên hệ kỹ thuật" icon={Phone} disabled={isReadOnly} />
                     </div>
 
                     <h4 className="text-sm font-bold text-gray-700 mb-3 mt-4">Chi tiết kỹ thuật (Nội bộ)</h4>
@@ -1228,23 +1325,32 @@ function IncidentTrackerContent() {
                             onChange={v => setFormData({...formData, receiver: v})} 
                             placeholder="Người nhận ticket" 
                             icon={User}
+                            disabled={isReadOnly}
                             action={
-                                !formData.receiver && (
+                                !isReadOnly && !formData.receiver && (
                                     <button onClick={() => assignToMe('receiver', 'receiverPhone')} className="text-xs text-blue-600 hover:underline">
                                         Điền tên tôi
                                     </button>
                                 )
                             }
                         />
+                         {/* Thêm trường thời gian thực hiện */}
+                         <InputField 
+                            label="Thời gian thực hiện (Xong)" 
+                            type="datetime-local"
+                            value={formData.processingTime || ''} 
+                            onChange={v => setFormData({...formData, processingTime: v})} 
+                            disabled={isReadOnly}
+                        />
                     </div>
 
-                    <InputField label="Nguyên nhân gốc rễ" type="textarea" value={formData.rootCause || ''} onChange={v => setFormData({...formData, rootCause: v})} placeholder="Tại sao sự cố xảy ra?" />
-                    <InputField label="Cách xử lý" type="textarea" value={formData.resolution || ''} onChange={v => setFormData({...formData, resolution: v})} placeholder="Các bước đã thực hiện..." />
+                    <InputField label="Nguyên nhân gốc rễ" type="textarea" value={formData.rootCause || ''} onChange={v => setFormData({...formData, rootCause: v})} placeholder="Tại sao sự cố xảy ra?" disabled={isReadOnly} />
+                    <InputField label="Cách xử lý" type="textarea" value={formData.resolution || ''} onChange={v => setFormData({...formData, resolution: v})} placeholder="Các bước đã thực hiện..." disabled={isReadOnly} />
 
                     <div className="border-t pt-4 mt-4 bg-gray-100 p-4 rounded-lg">
-                        <SelectField label="Kết quả xử lý" value={formData.status || 'NEW'} onChange={v => setFormData({...formData, status: v})} options={Object.keys(STATUS).map(k => ({ value: k, label: STATUS[k].label }))} required />
+                        <SelectField label="Kết quả xử lý" value={formData.status || 'NEW'} onChange={v => setFormData({...formData, status: v})} options={Object.keys(STATUS).map(k => ({ value: k, label: STATUS[k].label }))} required disabled={isReadOnly} />
                         {formData.status === 'INCOMPLETE' && (
-                        <InputField label="Lý do chưa hoàn thành" value={formData.incompleteReason || ''} onChange={v => setFormData({...formData, incompleteReason: v})} required placeholder="Thiếu vật tư, cần vendor hỗ trợ..." />
+                        <InputField label="Lý do chưa hoàn thành" value={formData.incompleteReason || ''} onChange={v => setFormData({...formData, incompleteReason: v})} required placeholder="Thiếu vật tư, cần vendor hỗ trợ..." disabled={isReadOnly} />
                         )}
                     </div>
                 </div>
@@ -1254,16 +1360,23 @@ function IncidentTrackerContent() {
             <div className="space-y-6">
                 <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 sticky top-24">
                     <h3 className="font-bold text-gray-800 mb-4">Hành động</h3>
-                    <button onClick={isEdit ? handleUpdate : handleCreate} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2 mb-3">
-                        <Save size={18} /> {isEdit ? 'Cập Nhật' : 'Gửi Báo Cáo'}
-                    </button>
+                    
+                    {/* Chỉ hiển thị nút Cập Nhật / Gửi nếu được phép Edit */}
+                    {!isReadOnly && (
+                        <button onClick={isEdit ? handleUpdate : handleCreate} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2 mb-3">
+                            <Save size={18} /> {isEdit ? 'Cập Nhật' : 'Gửi Báo Cáo'}
+                        </button>
+                    )}
+
+                    {/* Chỉ cho phép Clone nếu có quyền Edit hoặc xem (tùy nghiệp vụ, ở đây tạm cho phép Clone nếu có quyền xem để tạo mới dựa trên cũ, vì tạo mới thì ai cũng đc) */}
                     {isEdit && (
                         <button onClick={handleClone} className="w-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium py-3 rounded-lg hover:bg-indigo-100 transition flex items-center justify-center gap-2 mb-3">
                             <Copy size={18} /> Nhân bản sự cố này
                         </button>
                     )}
+
                     <button onClick={() => setView('list')} className="w-full bg-white text-gray-600 border border-gray-300 font-medium py-3 rounded-lg hover:bg-gray-50 transition">
-                        Hủy bỏ
+                        {isReadOnly ? 'Đóng' : 'Hủy bỏ'}
                     </button>
                 </div>
 
@@ -1277,26 +1390,31 @@ function IncidentTrackerContent() {
                             {formData.imagesBefore?.map((img, idx) => (
                                 <div key={idx} className="relative group">
                                     <img src={img} alt="Before" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
-                                    <button 
-                                        onClick={() => setFormData({...formData, imagesBefore: formData.imagesBefore.filter((_, i) => i !== idx)})}
-                                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
-                                    >
-                                        <X size={12} />
-                                    </button>
+                                    {!isReadOnly && (
+                                        <button 
+                                            onClick={() => setFormData({...formData, imagesBefore: formData.imagesBefore.filter((_, i) => i !== idx)})}
+                                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
-                        {/* 2 Buttons: Chụp & Tải */}
-                        <div className="grid grid-cols-2 gap-2">
-                            <div onClick={() => startCamera('before')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 transition bg-white`}>
-                                <Camera className="mb-1 w-6 h-6" />
-                                <span className="text-[10px] font-medium">Chụp ảnh</span>
+                        
+                        {!isReadOnly && (
+                            <div className="grid grid-cols-2 gap-2">
+                                <div onClick={() => startCamera('before')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 transition bg-white`}>
+                                    <Camera className="mb-1 w-6 h-6" />
+                                    <span className="text-[10px] font-medium">Chụp ảnh</span>
+                                </div>
+                                <div onClick={() => triggerUpload('imagesBefore')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition bg-white ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    {isProcessingImage ? <Activity className="animate-spin mb-1 w-6 h-6"/> : <Upload className="mb-1 w-6 h-6" />}
+                                    <span className="text-[10px] font-medium">Tải ảnh</span>
+                                </div>
                             </div>
-                            <div onClick={() => triggerUpload('imagesBefore')} className={`cursor-pointer p-3 border border-dashed rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition bg-white ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
-                                {isProcessingImage ? <Activity className="animate-spin mb-1 w-6 h-6"/> : <Upload className="mb-1 w-6 h-6" />}
-                                <span className="text-[10px] font-medium">Tải ảnh</span>
-                            </div>
-                        </div>
+                        )}
+                        {isReadOnly && formData.imagesBefore?.length === 0 && <p className="text-xs text-gray-400 italic">Không có ảnh</p>}
                     </div>
 
                     {isEdit && (
@@ -1306,26 +1424,31 @@ function IncidentTrackerContent() {
                                 {formData.imagesAfter?.map((img, idx) => (
                                     <div key={idx} className="relative group">
                                         <img src={img} alt="After" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
-                                        <button 
-                                            onClick={() => setFormData({...formData, imagesAfter: formData.imagesAfter.filter((_, i) => i !== idx)})}
-                                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
-                                        >
-                                            <X size={12} />
-                                        </button>
+                                        {!isReadOnly && (
+                                            <button 
+                                                onClick={() => setFormData({...formData, imagesAfter: formData.imagesAfter.filter((_, i) => i !== idx)})}
+                                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
-                            {/* 2 Buttons: Chụp & Tải */}
-                            <div className="grid grid-cols-2 gap-2">
-                                <div onClick={() => startCamera('after')} className="cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 transition">
-                                    <Camera className="mb-1 w-6 h-6" />
-                                    <span className="text-[10px] font-medium">Chụp ảnh</span>
+                            
+                            {!isReadOnly && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div onClick={() => startCamera('after')} className="cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 transition">
+                                        <Camera className="mb-1 w-6 h-6" />
+                                        <span className="text-[10px] font-medium">Chụp ảnh</span>
+                                    </div>
+                                    <div onClick={() => triggerUpload('imagesAfter')} className={`cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                                        {isProcessingImage ? <Activity className="animate-spin mb-1 w-6 h-6"/> : <Upload className="mb-1 w-6 h-6" />}
+                                        <span className="text-[10px] font-medium">Tải ảnh</span>
+                                    </div>
                                 </div>
-                                <div onClick={() => triggerUpload('imagesAfter')} className={`cursor-pointer p-3 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-blue-500 hover:bg-blue-50 transition ${isProcessingImage ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    {isProcessingImage ? <Activity className="animate-spin mb-1 w-6 h-6"/> : <Upload className="mb-1 w-6 h-6" />}
-                                    <span className="text-[10px] font-medium">Tải ảnh</span>
-                                </div>
-                            </div>
+                            )}
+                            {isReadOnly && formData.imagesAfter?.length === 0 && <p className="text-xs text-gray-400 italic">Không có ảnh</p>}
                         </div>
                     )}
                 </div>
@@ -1334,7 +1457,7 @@ function IncidentTrackerContent() {
         </div>
       </div>
     </div>
-  );
+  ); }
 
   if (!appUser && view !== 'login') return <div className="flex h-screen items-center justify-center bg-gray-50"><Activity className="animate-spin text-blue-500 mr-2"/> Đang khởi tạo hệ thống...</div>;
   if (view === 'login') return renderLogin();
