@@ -26,12 +26,14 @@ import {
   Save, X, LayoutGrid, List, Database, MapPin, 
   Repeat, BarChart2, Phone, Calendar, MessageSquare,
   Lock, LogOut, UserCheck, Mail, RefreshCw, Copy, Layers,
-  Aperture, Upload, Eye
+  Aperture, Upload, Eye, PieChart, TrendingUp, AlertOctagon
 } from 'lucide-react';
 
 // ==========================================
 // 1. CONFIGURATION LAYER
 // ==========================================
+
+// --- CẤU HÌNH (SANDBOX ENVIRONMENT) ---
 const firebaseConfig = {
   apiKey: "AIzaSyBxOcR7j53VOT4Uh-yjel6luVOjOtxNw5o",
   authDomain: "incident-tracker-f9651.firebaseapp.com",
@@ -40,8 +42,6 @@ const firebaseConfig = {
   messagingSenderId: "320586095896",
   appId: "1:320586095896:web:3e3ee4044206872617926d"
 };
-// --- CẤU HÌNH (SANDBOX ENVIRONMENT) ---
-// const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -354,7 +354,7 @@ function IncidentTrackerContent() {
   const [projectsConfig, setProjectsConfig] = useState({}); 
   
   const [selectedIncident, setSelectedIncident] = useState(null);
-  const [previewData, setPreviewData] = useState(null); // State để lưu dữ liệu xem ảnh
+  const [previewData, setPreviewData] = useState(null); 
   
   const [loading, setLoading] = useState(true);
   const [generatingMock, setGeneratingMock] = useState(false);
@@ -370,7 +370,7 @@ function IncidentTrackerContent() {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null); 
   const [showCamera, setShowCamera] = useState(false);
-  const [cameraMode, setCameraMode] = useState(null); // 'before' | 'after'
+  const [cameraMode, setCameraMode] = useState(null); 
   const [uploadTarget, setUploadTarget] = useState(null); 
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
@@ -633,17 +633,41 @@ function IncidentTrackerContent() {
   }, [incidents, filterProject, filterStatus]);
 
   const stats = useMemo(() => {
-    const byFrequency = { DAILY: 0, WEEKLY: 0, MONTHLY: 0 };
-    const byArea = {};
+    const res = {
+        total: incidents.length,
+        done: 0,
+        critical: 0,
+        byProject: {},
+        byType: {},
+        bySeverity: { CRITICAL: 0, MAJOR: 0, MINOR: 0 },
+        byFrequency: { DAILY: 0, WEEKLY: 0, MONTHLY: 0, NONE: 0 },
+    };
+
     incidents.forEach(inc => {
-        if (inc.frequency && inc.frequency !== 'NONE' && byFrequency[inc.frequency] !== undefined) byFrequency[inc.frequency]++;
-        if (inc.project && inc.area) {
-            const key = `${inc.project} - ${inc.area}`;
-            byArea[key] = (byArea[key] || 0) + 1;
+        // Status Count
+        if (inc.status === 'DONE') res.done++;
+        
+        // Project Count
+        const proj = inc.project || 'Chưa phân loại';
+        res.byProject[proj] = (res.byProject[proj] || 0) + 1;
+
+        // Type Count
+        const type = inc.type || 'Khác';
+        res.byType[type] = (res.byType[type] || 0) + 1;
+
+        // Severity Count
+        if (inc.severity && res.bySeverity[inc.severity] !== undefined) {
+            res.bySeverity[inc.severity]++;
+            if (inc.severity === 'CRITICAL') res.critical++;
+        }
+
+        // Frequency Count
+        if (inc.frequency && res.byFrequency[inc.frequency] !== undefined) {
+            res.byFrequency[inc.frequency]++;
         }
     });
-    const topAreas = Object.entries(byArea).sort(([,a], [,b]) => b - a).slice(0, 5);
-    return { byFrequency, topAreas };
+
+    return res;
   }, [incidents]);
 
   // --- VIEWS ---
@@ -941,26 +965,139 @@ function IncidentTrackerContent() {
                 <div className="w-20"></div>
             </div>
         </div>
-        <div className="px-4 md:px-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                    <Activity className="mr-2 text-red-500" /> Tần Suất Lỗi
-                </h3>
-                <div className="space-y-4">
-                    {Object.entries(stats.byFrequency).map(([key, count]) => (
-                        <div key={key}>
-                            <div className="flex justify-between text-sm mb-1">
-                                <span className="font-medium text-gray-700">{FREQUENCIES[key].label}</span>
-                                <span className="font-bold">{count}</span>
+        
+        <div className="px-4 md:px-6 space-y-6">
+            
+            {/* 1. Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center">
+                    <div className="p-3 bg-blue-100 text-blue-600 rounded-full mr-4">
+                        <Database size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium">Tổng sự cố</p>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.total}</h3>
+                    </div>
+                </div>
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center">
+                    <div className="p-3 bg-red-100 text-red-600 rounded-full mr-4">
+                        <AlertOctagon size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium">Nghiêm trọng</p>
+                        <h3 className="text-2xl font-bold text-gray-900">{stats.critical}</h3>
+                    </div>
+                </div>
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center">
+                    <div className="p-3 bg-green-100 text-green-600 rounded-full mr-4">
+                        <TrendingUp size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium">Tỷ lệ hoàn thành</p>
+                        <h3 className="text-2xl font-bold text-gray-900">
+                            {stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0}%
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* 2. Theo Dự Án */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                        <Layers className="mr-2 text-indigo-500" /> Theo Dự Án
+                    </h3>
+                    <div className="space-y-4">
+                        {Object.entries(stats.byProject).map(([proj, count]) => (
+                            <div key={proj}>
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="font-medium text-gray-700 truncate pr-2">{proj}</span>
+                                    <span className="font-bold">{count}</span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-2">
+                                    <div 
+                                        className="h-2 rounded-full bg-indigo-500"
+                                        style={{ width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%` }}
+                                    ></div>
+                                </div>
                             </div>
-                            <div className="w-full bg-gray-100 rounded-full h-2.5">
-                                <div 
-                                    className={`h-2.5 rounded-full ${key === 'DAILY' ? 'bg-red-500' : key === 'WEEKLY' ? 'bg-orange-500' : 'bg-yellow-500'}`} 
-                                    style={{ width: `${incidents.length > 0 ? (count / incidents.length) * 100 : 0}%` }}
-                                ></div>
+                        ))}
+                         {Object.keys(stats.byProject).length === 0 && <p className="text-sm text-gray-400 italic text-center py-4">Chưa có dữ liệu</p>}
+                    </div>
+                </div>
+
+                {/* 3. Theo Loại Sự Cố */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                        <PieChart className="mr-2 text-teal-500" /> Theo Loại Sự Cố
+                    </h3>
+                    <div className="space-y-4">
+                        {Object.entries(stats.byType).map(([type, count]) => (
+                            <div key={type}>
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="font-medium text-gray-700">{type}</span>
+                                    <span className="font-bold">{count}</span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-2">
+                                    <div 
+                                        className="h-2 rounded-full bg-teal-500"
+                                        style={{ width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%` }}
+                                    ></div>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                         {Object.keys(stats.byType).length === 0 && <p className="text-sm text-gray-400 italic text-center py-4">Chưa có dữ liệu</p>}
+                    </div>
+                </div>
+                
+                 {/* 4. Theo Mức Độ */}
+                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                        <AlertTriangle className="mr-2 text-orange-500" /> Theo Mức Độ
+                    </h3>
+                    <div className="flex gap-4 items-end justify-around h-40 pb-4">
+                        {Object.entries(stats.bySeverity).map(([sev, count]) => {
+                             const config = SEVERITY[sev];
+                             const height = stats.total > 0 ? (count / stats.total) * 100 : 0;
+                             // Min height 10% for visual
+                             const visualHeight = count > 0 ? Math.max(height, 10) : 0; 
+                             
+                             return (
+                                <div key={sev} className="flex flex-col items-center justify-end h-full w-1/3 group">
+                                    <div className="text-xs font-bold mb-1 text-gray-600">{count}</div>
+                                    <div 
+                                        className={`w-full max-w-[40px] rounded-t-lg transition-all duration-500 ${config ? config.color.split(' ')[0] : 'bg-gray-200'}`}
+                                        style={{ height: `${visualHeight}%` }}
+                                    ></div>
+                                    <div className="text-xs text-gray-500 mt-2 font-medium">{config ? config.label : sev}</div>
+                                </div>
+                             )
+                        })}
+                    </div>
+                </div>
+
+                {/* 5. Theo Tần Suất (Original Logic) */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                        <Activity className="mr-2 text-red-500" /> Tần Suất Lặp Lại
+                    </h3>
+                    <div className="space-y-4">
+                        {Object.entries(stats.byFrequency).map(([key, count]) => (
+                            <div key={key}>
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="font-medium text-gray-700">{FREQUENCIES[key].label}</span>
+                                    <span className="font-bold">{count}</span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-2.5">
+                                    <div 
+                                        className={`h-2.5 rounded-full ${key === 'DAILY' ? 'bg-red-500' : key === 'WEEKLY' ? 'bg-orange-500' : 'bg-yellow-500'}`} 
+                                        style={{ width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
